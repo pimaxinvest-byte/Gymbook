@@ -12,7 +12,7 @@ export async function GET() {
 
   const clients = await prisma.client.findMany({
     include: {
-      user: { select: { id: true, name: true, email: true } },
+      user: { select: { id: true, name: true, email: true, avatarUrl: true, telegramChatId: true } },
     },
     orderBy: { user: { name: "asc" } },
   });

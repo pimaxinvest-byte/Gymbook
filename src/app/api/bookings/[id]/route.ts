@@ -11,10 +11,11 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
   const booking = await prisma.booking.findUnique({
     where: { id },
     include: {
-      teacher: { include: { user: { select: { name: true } } } },
-      client: { include: { user: { select: { name: true } } } },
+      teacher: { include: { user: { select: { name: true, avatarUrl: true, telegramChatId: true } } } },
+      client: { include: { user: { select: { name: true, avatarUrl: true } } } },
       activity: { select: { name: true } },
       space: { select: { name: true } },
+      participants: { include: { client: { include: { user: { select: { name: true, avatarUrl: true } } } } } },
     },
   });
 
@@ -38,7 +39,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       space: true,
     },
   });
-
   if (!booking) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   // Permissions
@@ -52,22 +52,33 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
   }
 
-  // --- Credit refund on cancellation ---
-  let updated;
   const isCancelling = body.status === "CANCELLED" && booking.status === "BOOKED";
+  let updated;
 
   if (isCancelling && booking.clientId) {
-    // Find the credit record for this (client, teacher) pair
+    // Load cancellation policy
+    const settings = await prisma.appSettings.findFirst();
+    const hoursLimit = settings?.cancellationHoursLimit ?? 24;
+    const refundCredits = settings?.cancellationRefundCredits ?? true;
+
+    const hoursUntilStart = (booking.startDatetime.getTime() - Date.now()) / 3_600_000;
+    const cancelledInTime = hoursUntilStart >= hoursLimit;
+
+    const isSGT = booking.sessionType === "SGT";
+    const creditType = isSGT ? "SGT" : "INDIVIDUAL";
+
     const creditRecord = await prisma.clientCredits.findUnique({
       where: {
-        clientId_teacherId: {
+        clientId_teacherId_creditType: {
           clientId: booking.clientId,
           teacherId: booking.teacherId,
+          creditType,
         },
       },
     });
 
-    if (creditRecord) {
+    if (creditRecord && refundCredits && cancelledInTime) {
+      // Refund credit
       updated = await prisma.$transaction(async (tx) => {
         const result = await tx.booking.update({ where: { id }, data: body });
 
@@ -82,7 +93,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             amount: 1,
             type: "REFUNDED",
             bookingId: id,
-            note: `Cancelación de ${booking.activity.name}`,
+            note: `Cancelación a tiempo de ${booking.activity.name}`,
             createdById: session.user.id,
           },
         });
@@ -90,7 +101,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         return result;
       });
     } else {
+      // No refund (too late or policy says no)
       updated = await prisma.booking.update({ where: { id }, data: body });
+
+      if (creditRecord && !cancelledInTime) {
+        // Log as non-refunded
+        await prisma.creditTransaction.create({
+          data: {
+            clientCreditsId: creditRecord.id,
+            amount: 0,
+            type: "DEDUCTED",
+            bookingId: id,
+            note: `Cancelación tardía — sin reembolso de crédito`,
+            createdById: session.user.id,
+          },
+        });
+      }
     }
   } else {
     updated = await prisma.booking.update({ where: { id }, data: body });
@@ -109,9 +135,17 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   };
 
   if (body.status === "CANCELLED") {
-    notifyBookingCancelled(notifData, booking.teacher.user.telegramChatId || undefined, booking.client?.user.telegramChatId || undefined).catch(console.error);
+    notifyBookingCancelled(
+      notifData,
+      booking.teacher.user.telegramChatId || undefined,
+      booking.client?.user.telegramChatId || undefined
+    ).catch(console.error);
   } else {
-    notifyBookingModified(notifData, booking.teacher.user.telegramChatId || undefined, booking.client?.user.telegramChatId || undefined).catch(console.error);
+    notifyBookingModified(
+      notifData,
+      booking.teacher.user.telegramChatId || undefined,
+      booking.client?.user.telegramChatId || undefined
+    ).catch(console.error);
   }
 
   return NextResponse.json(updated);

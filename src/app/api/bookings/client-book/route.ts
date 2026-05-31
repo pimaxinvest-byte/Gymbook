@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { notifyBookingCreated } from "@/lib/telegram";
+import { CreditType } from "@prisma/client";
 
 const schema = z.object({
   bookingId: z.string(),
@@ -21,7 +22,6 @@ export async function POST(req: NextRequest) {
     where: { userId: session.user.id },
     include: { user: { select: { name: true, telegramChatId: true } } },
   });
-
   if (!client) return NextResponse.json({ error: "Client profile not found" }, { status: 404 });
 
   const booking = await prisma.booking.findUnique({
@@ -30,38 +30,79 @@ export async function POST(req: NextRequest) {
       teacher: { include: { user: { select: { name: true, telegramChatId: true } } } },
       activity: { select: { name: true } },
       space: { select: { name: true } },
+      participants: true,
     },
   });
-
   if (!booking) return NextResponse.json({ error: "Booking not found" }, { status: 404 });
   if (booking.status !== "AVAILABLE") {
     return NextResponse.json({ error: "Esta franja no está disponible" }, { status: 409 });
   }
 
-  // --- Credit check ---
+  const isSGT = booking.sessionType === "SGT";
+  const creditType: CreditType = isSGT ? "SGT" : "INDIVIDUAL";
+
+  // For SGT: check capacity and not already joined
+  if (isSGT) {
+    if (booking.participants.length >= booking.capacity) {
+      return NextResponse.json({ error: "El grupo está lleno" }, { status: 409 });
+    }
+    const alreadyJoined = booking.participants.some((p) => p.clientId === client.id);
+    if (alreadyJoined) {
+      return NextResponse.json({ error: "Ya estás apuntado a esta sesión" }, { status: 409 });
+    }
+  }
+
+  // Check client is assigned to this teacher
+  const assignment = await prisma.clientTeacher.findUnique({
+    where: { clientId_teacherId: { clientId: client.id, teacherId: booking.teacherId } },
+  });
+  if (!assignment) {
+    return NextResponse.json(
+      { error: "No estás asignado a este entrenador" },
+      { status: 403 }
+    );
+  }
+
+  // Credit check
+  const now = new Date();
   const creditRecord = await prisma.clientCredits.findUnique({
     where: {
-      clientId_teacherId: {
+      clientId_teacherId_creditType: {
         clientId: client.id,
         teacherId: booking.teacherId,
+        creditType,
       },
     },
   });
 
   const balance = creditRecord?.balance ?? 0;
-  if (balance < 1) {
-    return NextResponse.json(
-      { error: "No tienes créditos suficientes con este entrenador" },
-      { status: 402 }
-    );
+  const isExpired = creditRecord?.expiresAt ? creditRecord.expiresAt < now : false;
+
+  if (balance < 1 || isExpired) {
+    const msg = isExpired
+      ? `Tus créditos ${isSGT ? "SGT " : ""}han caducado`
+      : `No tienes créditos ${isSGT ? "SGT " : ""}suficientes con este entrenador`;
+    return NextResponse.json({ error: msg }, { status: 402 });
   }
 
-  // --- Atomic: book + deduct credit ---
+  // Atomic: book + deduct credit
   const updated = await prisma.$transaction(async (tx) => {
-    const bookedEntry = await tx.booking.update({
-      where: { id: bookingId },
-      data: { clientId: client.id, status: "BOOKED" },
-    });
+    let result;
+
+    if (isSGT) {
+      // Add participant; if full, mark as BOOKED
+      await tx.bookingParticipant.create({ data: { bookingId, clientId: client.id } });
+      const newCount = booking.participants.length + 1;
+      result = await tx.booking.update({
+        where: { id: bookingId },
+        data: newCount >= booking.capacity ? { status: "BOOKED" } : {},
+      });
+    } else {
+      result = await tx.booking.update({
+        where: { id: bookingId },
+        data: { clientId: client.id, status: "BOOKED" },
+      });
+    }
 
     await tx.clientCredits.update({
       where: { id: creditRecord!.id },
@@ -73,13 +114,13 @@ export async function POST(req: NextRequest) {
         clientCreditsId: creditRecord!.id,
         amount: -1,
         type: "DEDUCTED",
-        bookingId: bookingId,
-        note: `Reserva ${booking.activity.name} con ${booking.teacher.user.name}`,
+        bookingId,
+        note: `Reserva ${booking.activity.name} con ${booking.teacher.user.name}${isSGT ? " (SGT)" : ""}`,
         createdById: session.user.id,
       },
     });
 
-    return bookedEntry;
+    return result;
   });
 
   notifyBookingCreated(

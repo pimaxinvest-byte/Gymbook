@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Calendar, PlusCircle, Users, BookOpen, Settings, LayoutDashboard, CreditCard } from "lucide-react";
+import { Calendar, PlusCircle, Users, BookOpen, Settings, LayoutDashboard, CreditCard, CalendarCheck, UserCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSession } from "next-auth/react";
 import type { Role } from "@prisma/client";
@@ -15,14 +15,18 @@ type NavItem = {
 };
 
 const navItems: NavItem[] = [
-  { href: "/calendar",        label: "Calendario",  icon: Calendar,       roles: ["ADMIN", "TEACHER", "CLIENT"] },
-  { href: "/book",            label: "Reservar",    icon: PlusCircle,     roles: ["CLIENT"] },
-  { href: "/my-bookings",     label: "Mis clases",  icon: BookOpen,       roles: ["CLIENT"] },
-  { href: "/teacher/schedule",label: "Mi horario",  icon: BookOpen,       roles: ["TEACHER"] },
-  { href: "/admin/dashboard", label: "Dashboard",   icon: LayoutDashboard,roles: ["ADMIN"] },
-  { href: "/admin/teachers",  label: "Equipo",      icon: Users,          roles: ["ADMIN"] },
-  { href: "/credits",         label: "Créditos",    icon: CreditCard,     roles: ["ADMIN", "TEACHER", "CLIENT"] },
-  { href: "/settings",        label: "Ajustes",     icon: Settings,       roles: ["ADMIN", "TEACHER", "CLIENT"] },
+  { href: "/calendar",             label: "Calendario",  icon: Calendar,       roles: ["ADMIN", "TEACHER", "CLIENT"] },
+  { href: "/book",                 label: "Reservar",    icon: PlusCircle,     roles: ["CLIENT"] },
+  { href: "/my-bookings",          label: "Mis clases",  icon: BookOpen,       roles: ["CLIENT"] },
+  { href: "/credits",              label: "Créditos",    icon: CreditCard,     roles: ["CLIENT"] },
+  { href: "/teacher/schedule",     label: "Planning",    icon: CalendarCheck,  roles: ["TEACHER"] },
+  { href: "/teacher/availability", label: "Disponib.",   icon: PlusCircle,     roles: ["TEACHER"] },
+  { href: "/teacher/clients",      label: "Clientes",    icon: UserCircle,     roles: ["TEACHER"] },
+  { href: "/credits",              label: "Créditos",    icon: CreditCard,     roles: ["TEACHER"] },
+  { href: "/admin/dashboard",      label: "Dashboard",   icon: LayoutDashboard,roles: ["ADMIN"] },
+  { href: "/admin/teachers",       label: "Equipo",      icon: Users,          roles: ["ADMIN"] },
+  { href: "/credits",              label: "Créditos",    icon: CreditCard,     roles: ["ADMIN"] },
+  { href: "/settings",             label: "Ajustes",     icon: Settings,       roles: ["ADMIN", "TEACHER", "CLIENT"] },
 ];
 
 export function BottomNav() {
@@ -34,7 +38,7 @@ export function BottomNav() {
 
   const visibleItems = navItems
     .filter((item) => item.roles.includes(role))
-    .slice(0, 5);
+    .slice(0, 5); // max 5 tabs
 
   return (
     <nav
@@ -48,13 +52,13 @@ export function BottomNav() {
           const Icon = item.icon;
           return (
             <Link
-              key={item.href}
+              key={`${item.href}-${role}`}
               href={item.href}
               aria-label={item.label}
               aria-current={isActive ? "page" : undefined}
               className={cn(
                 "relative flex-1 flex flex-col items-center justify-center gap-0.5 text-xs font-medium transition-colors duration-200",
-                "min-h-[44px]",                          /* touch target */
+                "min-h-[44px]",
                 isActive ? "text-orange-500" : "text-gray-400 hover:text-gray-600"
               )}
             >

@@ -21,64 +21,14 @@ enum BookingStatus {
   BLOCKED
 }
 
-model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  password      String
-  name          String
-  role          Role      @default(CLIENT)
-  telegramChatId String?
-  avatarUrl     String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  teacher       Teacher?
-  client        Client?
-  createdBookings Booking[] @relation("CreatedBy")
-  creditTransactions CreditTransaction[] @relation("CreditCreatedBy")
+enum SessionType {
+  INDIVIDUAL
+  SGT          // Small Group Training (max 5 clients)
 }
 
-model Teacher {
-  id          String    @id @default(cuid())
-  userId      String    @unique
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  color       String    @default("#6366f1")
-  bio         String?
-  specialties String[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  bookings    Booking[]
-  availabilitySlots AvailabilitySlot[]
-  clientCredits ClientCredits[]
-}
-
-model Client {
-  id          String    @id @default(cuid())
-  userId      String    @unique
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  notes       String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  bookings    Booking[]
-  credits     ClientCredits[]
-}
-
-// Credits balance per (client, teacher) pair
-model ClientCredits {
-  id          String    @id @default(cuid())
-  clientId    String
-  client      Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  teacherId   String
-  teacher     Teacher   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  balance     Int       @default(0)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  transactions CreditTransaction[]
-
-  @@unique([clientId, teacherId])
+enum CreditType {
+  INDIVIDUAL
+  SGT
 }
 
 enum CreditTransactionType {
@@ -87,17 +37,63 @@ enum CreditTransactionType {
   REFUNDED   // booking cancelled, credit returned
 }
 
-model CreditTransaction {
-  id              String                @id @default(cuid())
-  clientCreditsId String
-  clientCredits   ClientCredits         @relation(fields: [clientCreditsId], references: [id], onDelete: Cascade)
-  amount          Int                   // positive = add, negative = deduct
-  type            CreditTransactionType
-  bookingId       String?               // linked booking (nullable for manual assignments)
-  note            String?
-  createdById     String
-  createdBy       User                  @relation("CreditCreatedBy", fields: [createdById], references: [id])
-  createdAt       DateTime              @default(now())
+model User {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  password       String
+  name           String
+  role           Role      @default(CLIENT)
+  telegramChatId String?
+  avatarUrl      String?   // base64 data URL or external URL
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  teacher              Teacher?
+  client               Client?
+  createdBookings      Booking[]          @relation("CreatedBy")
+  creditTransactions   CreditTransaction[] @relation("CreditCreatedBy")
+}
+
+model Teacher {
+  id          String    @id @default(cuid())
+  userId      String    @unique
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  color       String    @default("#f97316")
+  bio         String?
+  specialties String[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  bookings          Booking[]
+  availabilitySlots AvailabilitySlot[]
+  clientCredits     ClientCredits[]
+  clientTeachers    ClientTeacher[]
+}
+
+model Client {
+  id        String    @id @default(cuid())
+  userId    String    @unique
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notes     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  bookings       Booking[]
+  credits        ClientCredits[]
+  clientTeachers ClientTeacher[]
+  sgtParticipations BookingParticipant[]
+}
+
+// Which teachers each client is assigned to (max 2 per client)
+model ClientTeacher {
+  id         String   @id @default(cuid())
+  clientId   String
+  client     Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  teacherId  String
+  teacher    Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  assignedAt DateTime @default(now())
+
+  @@unique([clientId, teacherId])
 }
 
 model Space {
@@ -109,7 +105,7 @@ model Space {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  bookings    Booking[]
+  bookings          Booking[]
   availabilitySlots AvailabilitySlot[]
 }
 
@@ -124,102 +120,151 @@ model Activity {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  bookings        Booking[]
+  bookings          Booking[]
   availabilitySlots AvailabilitySlot[]
 }
 
 model Booking {
-  id              String        @id @default(cuid())
-  teacherId       String
-  teacher         Teacher       @relation(fields: [teacherId], references: [id])
-  clientId        String?
-  client          Client?       @relation(fields: [clientId], references: [id])
-  spaceId         String
-  space           Space         @relation(fields: [spaceId], references: [id])
-  activityId      String
-  activity        Activity      @relation(fields: [activityId], references: [id])
-  startDatetime   DateTime
-  endDatetime     DateTime
-  status          BookingStatus @default(AVAILABLE)
-  color           String?
-  notes           String?
+  id               String        @id @default(cuid())
+  teacherId        String
+  teacher          Teacher       @relation(fields: [teacherId], references: [id])
+  clientId         String?       // null for SGT (use participants) or AVAILABLE
+  client           Client?       @relation(fields: [clientId], references: [id])
+  spaceId          String
+  space            Space         @relation(fields: [spaceId], references: [id])
+  activityId       String
+  activity         Activity      @relation(fields: [activityId], references: [id])
+  startDatetime    DateTime
+  endDatetime      DateTime
+  status           BookingStatus @default(AVAILABLE)
+  sessionType      SessionType   @default(INDIVIDUAL)
+  capacity         Int           @default(1)  // 1 for individual, up to 5 for SGT
+  color            String?
+  notes            String?
   recurrenceRuleId String?
-  recurrenceRule  BookingRecurrenceRule? @relation(fields: [recurrenceRuleId], references: [id])
-  createdById     String
-  createdBy       User          @relation("CreatedBy", fields: [createdById], references: [id])
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  recurrenceRule   BookingRecurrenceRule? @relation(fields: [recurrenceRuleId], references: [id])
+  createdById      String
+  createdBy        User          @relation("CreatedBy", fields: [createdById], references: [id])
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
-  notifications   NotificationLog[]
+  notifications NotificationLog[]
+  participants  BookingParticipant[]
+}
+
+// For SGT sessions — tracks which clients joined
+model BookingParticipant {
+  id        String   @id @default(cuid())
+  bookingId String
+  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id])
+  joinedAt  DateTime @default(now())
+
+  @@unique([bookingId, clientId])
 }
 
 model BookingRecurrenceRule {
-  id          String    @id @default(cuid())
-  daysOfWeek  Int[]
-  startTime   String
-  endTime     String
-  startDate   DateTime
-  endDate     DateTime
-  spaceId     String
-  activityId  String
-  teacherId   String
-  createdAt   DateTime  @default(now())
+  id         String   @id @default(cuid())
+  daysOfWeek Int[]
+  startTime  String
+  endTime    String
+  startDate  DateTime
+  endDate    DateTime
+  spaceId    String
+  activityId String
+  teacherId  String
+  createdAt  DateTime @default(now())
 
-  bookings    Booking[]
+  bookings Booking[]
 }
 
 model AvailabilitySlot {
-  id          String    @id @default(cuid())
-  teacherId   String
-  teacher     Teacher   @relation(fields: [teacherId], references: [id])
-  spaceId     String
-  space       Space     @relation(fields: [spaceId], references: [id])
-  activityId  String
-  activity    Activity  @relation(fields: [activityId], references: [id])
+  id            String   @id @default(cuid())
+  teacherId     String
+  teacher       Teacher  @relation(fields: [teacherId], references: [id])
+  spaceId       String
+  space         Space    @relation(fields: [spaceId], references: [id])
+  activityId    String
+  activity      Activity @relation(fields: [activityId], references: [id])
   startDatetime DateTime
   endDatetime   DateTime
-  maxCapacity   Int     @default(1)
-  minDuration   Int     @default(30)
-  maxDuration   Int     @default(120)
-  isRecurring   Boolean @default(false)
+  maxCapacity   Int      @default(1)
+  minDuration   Int      @default(30)
+  maxDuration   Int      @default(120)
+  isRecurring   Boolean  @default(false)
   daysOfWeek    Int[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// Credits balance per (client, teacher, creditType)
+model ClientCredits {
+  id         String     @id @default(cuid())
+  clientId   String
+  client     Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  teacherId  String
+  teacher    Teacher    @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  creditType CreditType @default(INDIVIDUAL)
+  balance    Int        @default(0)
+  expiresAt  DateTime?  // 6 months from last assignment
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  transactions CreditTransaction[]
+
+  @@unique([clientId, teacherId, creditType])
+}
+
+model CreditTransaction {
+  id              String                @id @default(cuid())
+  clientCreditsId String
+  clientCredits   ClientCredits         @relation(fields: [clientCreditsId], references: [id], onDelete: Cascade)
+  amount          Int                   // positive = add, negative = deduct
+  type            CreditTransactionType
+  bookingId       String?
+  note            String?
+  createdById     String
+  createdBy       User                  @relation("CreditCreatedBy", fields: [createdById], references: [id])
+  createdAt       DateTime              @default(now())
 }
 
 model AppSettings {
-  id                    String  @id @default(cuid())
-  gymName               String  @default("Mi Gimnasio")
-  logoUrl               String?
-  primaryColor          String  @default("#6366f1")
-  secondaryColor        String  @default("#8b5cf6")
-  accentColor           String  @default("#a78bfa")
-  defaultSessionDuration Int    @default(60)
-  openingTime           String  @default("06:00")
-  closingTime           String  @default("22:00")
-  bookingConfirmationText String @default("¡Tu reserva ha sido confirmada!")
-  cancellationHoursLimit Int    @default(24)
-  updatedAt             DateTime @updatedAt
+  id                      String   @id @default(cuid())
+  gymName                 String   @default("Mi Gimnasio")
+  logoUrl                 String?
+  primaryColor            String   @default("#f97316")
+  secondaryColor          String   @default("#ea580c")
+  accentColor             String   @default("#fb923c")
+  defaultSessionDuration  Int      @default(60)
+  openingTime             String   @default("06:00")
+  closingTime             String   @default("22:00")
+  bookingConfirmationText String   @default("¡Tu reserva ha sido confirmada!")
+  cancellationHoursLimit  Int      @default(24)
+  cancellationRefundCredits Boolean @default(true)  // refund credit if cancelled in time
+  creditExpiryMonths      Int      @default(6)
+  sgtMaxClients           Int      @default(5)
+  updatedAt               DateTime @updatedAt
 }
 
 model TelegramSettings {
-  id              String  @id @default(cuid())
-  botToken        String?
-  adminChatId     String?
-  notifyAdmin     Boolean @default(true)
-  notifyTeacher   Boolean @default(true)
-  notifyClient    Boolean @default(true)
-  updatedAt       DateTime @updatedAt
+  id            String   @id @default(cuid())
+  botToken      String?
+  adminChatId   String?
+  notifyAdmin   Boolean  @default(true)
+  notifyTeacher Boolean  @default(true)
+  notifyClient  Boolean  @default(true)
+  updatedAt     DateTime @updatedAt
 }
 
 model NotificationLog {
-  id          String    @id @default(cuid())
-  bookingId   String
-  booking     Booking   @relation(fields: [bookingId], references: [id])
-  type        String
-  recipient   String
-  message     String
-  success     Boolean
-  error       String?
-  createdAt   DateTime  @default(now())
+  id        String   @id @default(cuid())
+  bookingId String
+  booking   Booking  @relation(fields: [bookingId], references: [id])
+  type      String
+  recipient String
+  message   String
+  success   Boolean
+  error     String?
+  createdAt DateTime @default(now())
 }

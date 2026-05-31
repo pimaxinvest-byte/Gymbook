@@ -6,11 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Edit2, Trash2, Loader2, User } from "lucide-react";
+import { Plus, Edit2, Trash2, Loader2 } from "lucide-react";
 import { CardSkeleton } from "@/components/ui/skeleton";
+import { Avatar } from "@/components/ui/avatar";
 import { toast } from "@/components/ui/toaster";
 
-interface Teacher { id: string; color: string; bio?: string; user: { id: string; name: string; email: string; telegramChatId?: string } }
+interface Teacher { id: string; color: string; bio?: string; user: { id: string; name: string; email: string; telegramChatId?: string | null; avatarUrl?: string | null } }
 
 export default function TeachersPage() {
   const [teachers, setTeachers] = useState<Teacher[]>([]);
@@ -52,14 +53,22 @@ export default function TeachersPage() {
             {teachers.map((t) => (
               <Card key={t.id}>
                 <CardContent className="p-4 flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: t.color }}>
-                    <User className="h-6 w-6 text-white" />
-                  </div>
+                  <Avatar
+                    name={t.user.name}
+                    avatarUrl={t.user.avatarUrl}
+                    telegramChatId={t.user.telegramChatId}
+                    size="md"
+                    editable
+                    userId={t.user.id}
+                  />
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-gray-900 truncate">{t.user.name}</p>
                     <p className="text-xs text-gray-500 truncate">{t.user.email}</p>
                     {t.user.telegramChatId && (
-                      <p className="text-xs text-blue-500 truncate">📱 Telegram activo</p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" aria-hidden="true" />
+                        <span className="text-xs text-blue-600 font-medium">Telegram activo</span>
+                      </div>
                     )}
                   </div>
                   <div className="flex gap-2 flex-shrink-0">

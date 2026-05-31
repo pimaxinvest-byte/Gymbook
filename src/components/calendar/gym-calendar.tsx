@@ -8,7 +8,6 @@ import interactionPlugin from "@fullcalendar/interaction";
 import listPlugin from "@fullcalendar/list";
 
 import { BookingDetailModal } from "@/components/booking/booking-detail-modal";
-import { cn } from "@/lib/utils";
 
 interface CalendarEvent {
   id: string;
@@ -18,14 +17,20 @@ interface CalendarEvent {
   backgroundColor: string;
   borderColor: string;
   textColor: string;
+  classNames: string[];
   extendedProps: {
     teacherName: string;
     clientName?: string;
     activityName: string;
     spaceName: string;
     status: string;
+    sessionType: string;
+    capacity: number;
+    occupancy: number;
+    isFull: boolean;
     notes?: string;
     teacherId: string;
+    participantNames?: string[];
   };
 }
 
@@ -39,6 +44,7 @@ interface GymCalendarProps {
   onDateSelect?: (info: any) => void;
   selectable?: boolean;
   initialView?: string;
+  onRefresh?: () => void;
 }
 
 export function GymCalendar({
@@ -75,68 +81,118 @@ export function GymCalendar({
     setSelectedBooking(info.event.id);
   }
 
-  return (
-    <div className="gym-calendar">
-      <FullCalendar
-        ref={calendarRef}
-        plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, listPlugin]}
-        initialView={initialView}
-        headerToolbar={{
-          left: "prev,next",
-          center: "title",
-          right: "timeGridDay,timeGridWeek,dayGridMonth,listWeek",
-        }}
-        buttonText={{
-          day: "Día",
-          week: "Semana",
-          month: "Mes",
-          list: "Lista",
-        }}
-        locale="es"
-        firstDay={1}
-        slotMinTime="06:00:00"
-        slotMaxTime="23:00:00"
-        allDaySlot={false}
-        height="auto"
-        events={events}
-        eventClick={handleEventClick}
-        select={onDateSelect}
-        selectable={selectable}
-        selectMirror={selectable}
-        nowIndicator
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        datesSet={(info: any) => fetchEvents(info.startStr, info.endStr)}
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        eventContent={(info: any) => (
-          <div className="fc-event-main-frame px-1 py-0.5 overflow-hidden">
-            <div className="fc-event-title font-semibold text-xs leading-tight truncate">
-              {info.event.extendedProps.activityName}
-            </div>
-            <div className="text-[10px] opacity-80 truncate">
-              {info.event.extendedProps.teacherName}
-              {info.event.extendedProps.clientName && ` · ${info.event.extendedProps.clientName}`}
-            </div>
-          </div>
-        )}
-        dayMaxEvents={4}
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        moreLinkText={(n: any) => `+${n} más`}
-      />
+  const refreshCalendar = useCallback(() => {
+    const calApi = calendarRef.current?.getApi();
+    if (calApi) {
+      const view = calApi.view;
+      fetchEvents(view.activeStart.toISOString(), view.activeEnd.toISOString());
+    }
+  }, [fetchEvents]);
 
-      {selectedBooking && (
-        <BookingDetailModal
-          bookingId={selectedBooking}
-          onClose={() => setSelectedBooking(null)}
-          onUpdate={() => {
-            setSelectedBooking(null);
-            const calApi = calendarRef.current?.getApi();
-            if (calApi) {
-              const view = calApi.view;
-              fetchEvents(view.activeStart.toISOString(), view.activeEnd.toISOString());
-            }
+  // Unused but kept to avoid ref warning
+  useEffect(() => {}, []);
+
+  return (
+    <>
+      <style>{`
+        .fc-event-available {
+          opacity: 0.52 !important;
+          border-style: dashed !important;
+        }
+        .fc-event-available:hover {
+          opacity: 0.85 !important;
+        }
+        .fc-timegrid-event .fc-event-main {
+          padding: 2px 4px;
+        }
+        .gym-calendar .fc-toolbar-title {
+          font-size: 1rem;
+          font-weight: 700;
+        }
+        .gym-calendar .fc-button {
+          border-radius: 8px !important;
+          font-size: 0.75rem !important;
+          padding: 4px 8px !important;
+        }
+        .gym-calendar .fc-button-primary {
+          background-color: #f97316 !important;
+          border-color: #f97316 !important;
+        }
+        .gym-calendar .fc-button-primary:not(.fc-button-active):hover {
+          background-color: #ea580c !important;
+        }
+        .gym-calendar .fc-button-active {
+          background-color: #c2410c !important;
+          border-color: #c2410c !important;
+        }
+        .gym-calendar .fc-now-indicator-line {
+          border-color: #f97316 !important;
+        }
+      `}</style>
+
+      <div className="gym-calendar">
+        <FullCalendar
+          ref={calendarRef}
+          plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, listPlugin]}
+          initialView={initialView}
+          headerToolbar={{
+            left: "prev,next today",
+            center: "title",
+            right: "timeGridDay,timeGridWeek,listWeek",
           }}
+          buttonText={{
+            today: "Hoy",
+            day: "Día",
+            week: "Semana",
+            list: "Lista",
+          }}
+          locale="es"
+          firstDay={1}
+          slotMinTime="06:00:00"
+          slotMaxTime="23:00:00"
+          allDaySlot={false}
+          height="auto"
+          events={events}
+          eventClick={handleEventClick}
+          select={onDateSelect}
+          selectable={selectable}
+          selectMirror={selectable}
+          nowIndicator
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          datesSet={(info: any) => fetchEvents(info.startStr, info.endStr)}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          eventContent={(info: any) => {
+            const ep = info.event.extendedProps;
+            const isSGT = ep.sessionType === "SGT";
+            return (
+              <div className="px-1 py-0.5 overflow-hidden h-full">
+                <div className="font-semibold text-[11px] leading-tight truncate">
+                  {ep.activityName}
+                  {isSGT && <span className="ml-1 text-[9px] bg-white/30 rounded px-1">SGT {ep.occupancy}/{ep.capacity}</span>}
+                </div>
+                <div className="text-[10px] opacity-80 truncate">
+                  {ep.teacherName}
+                  {ep.clientName && ` · ${ep.clientName}`}
+                </div>
+              </div>
+            );
+          }}
+          dayMaxEvents={4}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          moreLinkText={(n: any) => `+${n} más`}
         />
-      )}
-    </div>
+
+        {selectedBooking && (
+          <BookingDetailModal
+            bookingId={selectedBooking}
+            onClose={() => setSelectedBooking(null)}
+            onUpdate={() => {
+              setSelectedBooking(null);
+              refreshCalendar();
+            }}
+          />
+        )}
+      </div>
+    </>
   );
 }
