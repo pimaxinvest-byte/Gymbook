@@ -37,6 +37,31 @@ enum CreditTransactionType {
   REFUNDED   // booking cancelled, credit returned
 }
 
+enum PaymentStatus {
+  PAID
+  UNPAID
+  PARTIAL
+}
+
+enum PaymentMethod {
+  CASH      // efectivo
+  CARD      // tarjeta
+  TRANSFER  // transferencia
+  BIZUM
+  OTHER
+}
+
+enum CreditLogAction {
+  CREATED
+  MARKED_PAID
+  MARKED_UNPAID
+  PARTIALLY_PAID
+  CREDIT_USED
+  CREDIT_RESTORED
+  ADJUSTED
+  CANCELLED
+}
+
 enum ClientStatus {
   PENDING    // awaiting admin approval
   ACTIVE     // approved, can book
@@ -65,6 +90,8 @@ model User {
   client               Client?
   createdBookings      Booking[]          @relation("CreatedBy")
   creditTransactions   CreditTransaction[] @relation("CreditCreatedBy")
+  creditPackagesCreated ClientCredits[]    @relation("CreditPackageCreatedBy")
+  creditLogsPerformed  CreditLog[]         @relation("CreditLogPerformedBy")
 }
 
 model Teacher {
@@ -124,6 +151,7 @@ model Client {
   clientTeachers        ClientTeacher[]
   sgtParticipations     BookingParticipant[]
   waitlistEntries       WaitlistEntry[]
+  creditLogs            CreditLog[]
 }
 
 // Which teachers each client is assigned to (max 2 per client)
@@ -195,6 +223,14 @@ model Booking {
   notifications NotificationLog[]
   participants  BookingParticipant[]
   waitlist      WaitlistEntry[]
+  creditLogs    CreditLog[]
+
+  @@index([startDatetime])
+  @@index([teacherId])
+  @@index([activityId])
+  @@index([spaceId])
+  @@index([status])
+  @@index([clientId])
 }
 
 // For SGT sessions — tracks which clients joined
@@ -262,18 +298,28 @@ model AvailabilitySlot {
 
 // Credits balance per (client, teacher, creditType)
 model ClientCredits {
-  id         String     @id @default(cuid())
-  clientId   String
-  client     Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  teacherId  String
-  teacher    Teacher    @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  creditType CreditType @default(INDIVIDUAL)
-  balance    Int        @default(0)
-  expiresAt  DateTime?  // 6 months from last assignment
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
+  id             String        @id @default(cuid())
+  clientId       String
+  client         Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  teacherId      String
+  teacher        Teacher       @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  creditType     CreditType    @default(INDIVIDUAL)
+  balance        Int           @default(0)
+  totalAssigned  Int           @default(0)   // total credits ever assigned in this package
+  expiresAt      DateTime?                   // 6 months from last assignment
+  // Payment tracking
+  paymentStatus  PaymentStatus @default(UNPAID)
+  amountPaid     Float?
+  paymentMethod  PaymentMethod?
+  paymentDate    DateTime?
+  notes          String?
+  createdById    String?
+  createdBy      User?         @relation("CreditPackageCreatedBy", fields: [createdById], references: [id])
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
   transactions CreditTransaction[]
+  creditLogs   CreditLog[]
 
   @@unique([clientId, teacherId, creditType])
 }
@@ -289,6 +335,28 @@ model CreditTransaction {
   createdById     String
   createdBy       User                  @relation("CreditCreatedBy", fields: [createdById], references: [id])
   createdAt       DateTime              @default(now())
+}
+
+// Detailed audit log for credit operations
+model CreditLog {
+  id                String          @id @default(cuid())
+  clientCreditsId   String
+  clientCredits     ClientCredits   @relation(fields: [clientCreditsId], references: [id], onDelete: Cascade)
+  clientId          String
+  client            Client          @relation(fields: [clientId], references: [id])
+  actionType        CreditLogAction
+  previousValueJson Json?           // snapshot before change
+  newValueJson      Json?           // snapshot after change
+  amount            Int?            // credits affected (positive or negative)
+  performedById     String
+  performedBy       User            @relation("CreditLogPerformedBy", fields: [performedById], references: [id])
+  notes             String?
+  bookingId         String?
+  booking           Booking?        @relation(fields: [bookingId], references: [id])
+  createdAt         DateTime        @default(now())
+
+  @@index([clientId])
+  @@index([clientCreditsId])
 }
 
 model AppSettings {

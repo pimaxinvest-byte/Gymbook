@@ -14,6 +14,9 @@ export function AppShell({ children, title, gymName, logoUrl }: AppShellProps) {
       <Header title={title} gymName={gymName} logoUrl={logoUrl} />
       <main className="flex-1 pb-nav overflow-y-auto">
         {children}
+        <p className="text-center text-[10px] text-gray-300 py-2 select-none">
+          Creado por Pietro
+        </p>
       </main>
       <BottomNav />
     </div>
