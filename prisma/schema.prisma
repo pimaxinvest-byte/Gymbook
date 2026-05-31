@@ -37,16 +37,29 @@ enum CreditTransactionType {
   REFUNDED   // booking cancelled, credit returned
 }
 
+enum ClientStatus {
+  PENDING    // awaiting admin approval
+  ACTIVE     // approved, can book
+  REJECTED   // rejected by admin
+  SUSPENDED  // temporarily suspended
+}
+
 model User {
-  id             String    @id @default(cuid())
-  email          String    @unique
-  password       String
-  name           String
-  role           Role      @default(CLIENT)
-  telegramChatId String?
-  avatarUrl      String?   // base64 data URL or external URL
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id                 String    @id @default(cuid())
+  email              String    @unique
+  password           String
+  name               String
+  role               Role      @default(CLIENT)
+  // Telegram
+  telegramChatId     String?   // required to send messages
+  telegramUsername   String?   // @username, informational
+  telegramPhone      String?   // phone number, informational
+  telegramConnected  Boolean   @default(false)
+  telegramToken      String?   // one-time token for deep link connection
+  // Avatar
+  avatarUrl          String?   // base64 data URL or external URL
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   teacher              Teacher?
   client               Client?
@@ -68,20 +81,49 @@ model Teacher {
   availabilitySlots AvailabilitySlot[]
   clientCredits     ClientCredits[]
   clientTeachers    ClientTeacher[]
+  teacherActivities TeacherActivity[]
+  preferringClients Client[]           @relation("ClientPreferredTeacher")
+}
+
+// Many-to-many: Teacher <-> Activity
+model TeacherActivity {
+  id         String   @id @default(cuid())
+  teacherId  String
+  teacher    Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  activityId String
+  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  assignedAt DateTime @default(now())
+
+  @@unique([teacherId, activityId])
 }
 
 model Client {
-  id        String    @id @default(cuid())
-  userId    String    @unique
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  notes     String?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id            String       @id @default(cuid())
+  userId        String       @unique
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Onboarding / profile
+  status        ClientStatus @default(PENDING)
+  lastName      String?
+  phone         String?
+  goals         String?      // objective or interested activity
+  acceptedTerms Boolean      @default(false)
+  // Preferences
+  preferredActivityId String?
+  preferredActivity   Activity? @relation("ClientPreferredActivity", fields: [preferredActivityId], references: [id])
+  preferredTeacherId  String?
+  preferredTeacher    Teacher?  @relation("ClientPreferredTeacher", fields: [preferredTeacherId], references: [id])
+  // Admin notes
+  notes         String?
+  rejectedReason String?
+  activatedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  bookings       Booking[]
-  credits        ClientCredits[]
-  clientTeachers ClientTeacher[]
-  sgtParticipations BookingParticipant[]
+  bookings              Booking[]
+  credits               ClientCredits[]
+  clientTeachers        ClientTeacher[]
+  sgtParticipations     BookingParticipant[]
+  waitlistEntries       WaitlistEntry[]
 }
 
 // Which teachers each client is assigned to (max 2 per client)
@@ -98,7 +140,7 @@ model ClientTeacher {
 
 model Space {
   id          String    @id @default(cuid())
-  name        String
+  name        String    @unique
   description String?
   capacity    Int       @default(1)
   isActive    Boolean   @default(true)
@@ -111,7 +153,7 @@ model Space {
 
 model Activity {
   id              String    @id @default(cuid())
-  name            String
+  name            String    @unique
   description     String?
   defaultDuration Int       @default(60)
   maxCapacity     Int       @default(1)
@@ -120,8 +162,10 @@ model Activity {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  bookings          Booking[]
-  availabilitySlots AvailabilitySlot[]
+  bookings              Booking[]
+  availabilitySlots     AvailabilitySlot[]
+  teacherActivities     TeacherActivity[]
+  clientsPreferring     Client[]           @relation("ClientPreferredActivity")
 }
 
 model Booking {
@@ -150,6 +194,7 @@ model Booking {
 
   notifications NotificationLog[]
   participants  BookingParticipant[]
+  waitlist      WaitlistEntry[]
 }
 
 // For SGT sessions — tracks which clients joined
@@ -164,6 +209,21 @@ model BookingParticipant {
   @@unique([bookingId, clientId])
 }
 
+// Waiting list for full sessions
+model WaitlistEntry {
+  id        String   @id @default(cuid())
+  bookingId String
+  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id])
+  position  Int
+  notified  Boolean  @default(false)
+  acceptedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@unique([bookingId, clientId])
+}
+
 model BookingRecurrenceRule {
   id         String   @id @default(cuid())
   daysOfWeek Int[]
@@ -174,6 +234,8 @@ model BookingRecurrenceRule {
   spaceId    String
   activityId String
   teacherId  String
+  sessionType SessionType @default(INDIVIDUAL)
+  capacity   Int         @default(1)
   createdAt  DateTime @default(now())
 
   bookings Booking[]
@@ -241,15 +303,19 @@ model AppSettings {
   closingTime             String   @default("22:00")
   bookingConfirmationText String   @default("¡Tu reserva ha sido confirmada!")
   cancellationHoursLimit  Int      @default(24)
-  cancellationRefundCredits Boolean @default(true)  // refund credit if cancelled in time
+  cancellationRefundCredits Boolean @default(true)
   creditExpiryMonths      Int      @default(6)
   sgtMaxClients           Int      @default(5)
+  // Client onboarding
+  requireAdminApproval    Boolean  @default(true)
+  telegramBotName         String?  // e.g. "GymBookBot" for deep links
   updatedAt               DateTime @updatedAt
 }
 
 model TelegramSettings {
   id            String   @id @default(cuid())
   botToken      String?
+  botName       String?  // e.g. "GymBookBot"
   adminChatId   String?
   notifyAdmin   Boolean  @default(true)
   notifyTeacher Boolean  @default(true)
@@ -259,8 +325,8 @@ model TelegramSettings {
 
 model NotificationLog {
   id        String   @id @default(cuid())
-  bookingId String
-  booking   Booking  @relation(fields: [bookingId], references: [id])
+  bookingId String?
+  booking   Booking? @relation(fields: [bookingId], references: [id])
   type      String
   recipient String
   message   String
@@ -268,3 +334,6 @@ model NotificationLog {
   error     String?
   createdAt DateTime @default(now())
 }
+
+// Relation helpers needed for Client preferred teacher
+// (stored as direct fields above, no extra model needed)

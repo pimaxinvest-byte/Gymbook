@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import bcrypt from "bcryptjs";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -10,26 +11,35 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const { id } = await params;
   const body = await req.json();
-  const { name, email, color, bio, specialties, telegramChatId } = body;
+  const { name, email, color, bio, specialties, telegramChatId, password } = body;
 
   const teacher = await prisma.teacher.findUnique({ where: { id }, include: { user: true } });
   if (!teacher) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  if (name || email || telegramChatId !== undefined) {
-    await prisma.user.update({
-      where: { id: teacher.userId },
-      data: { ...(name && { name }), ...(email && { email }), ...(telegramChatId !== undefined && { telegramChatId }) },
-    });
+  // Update user fields
+  const userUpdate: Record<string, unknown> = {};
+  if (name)                    userUpdate.name = name;
+  if (email)                   userUpdate.email = email;
+  if (telegramChatId !== undefined) userUpdate.telegramChatId = telegramChatId;
+  if (password) {
+    userUpdate.password = await bcrypt.hash(password, 12);
+  }
+
+  if (Object.keys(userUpdate).length > 0) {
+    await prisma.user.update({ where: { id: teacher.userId }, data: userUpdate });
   }
 
   const updated = await prisma.teacher.update({
     where: { id },
     data: {
-      ...(color && { color }),
+      ...(color      && { color }),
       ...(bio !== undefined && { bio }),
       ...(specialties && { specialties }),
     },
-    include: { user: { select: { id: true, name: true, email: true, telegramChatId: true } } },
+    include: {
+      user: { select: { id: true, name: true, email: true, telegramChatId: true, telegramConnected: true, telegramUsername: true, avatarUrl: true } },
+      teacherActivities: { include: { activity: { select: { id: true, name: true, color: true } } } },
+    },
   });
 
   // Update color on future bookings

@@ -3,16 +3,19 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { notifyBookingCreated } from "@/lib/telegram";
+import { checkBookingConflicts } from "@/lib/booking-conflicts";
 
 const createSchema = z.object({
-  teacherId: z.string(),
-  spaceId: z.string(),
-  activityId: z.string(),
+  teacherId:    z.string(),
+  spaceId:      z.string(),
+  activityId:   z.string(),
   startDatetime: z.string(),
-  endDatetime: z.string(),
-  clientId: z.string().optional(),
-  notes: z.string().optional(),
-  status: z.enum(["AVAILABLE", "BOOKED", "BLOCKED"]).optional(),
+  endDatetime:  z.string(),
+  clientId:     z.string().optional(),
+  notes:        z.string().optional(),
+  status:       z.enum(["AVAILABLE", "BOOKED", "BLOCKED"]).optional(),
+  sessionType:  z.enum(["INDIVIDUAL", "SGT"]).optional(),
+  capacity:     z.number().int().min(1).max(10).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -37,22 +40,16 @@ export async function POST(req: NextRequest) {
     const start = new Date(data.startDatetime);
     const end = new Date(data.endDatetime);
 
-    // Check overlap
-    const overlap = await prisma.booking.findFirst({
-      where: {
-        spaceId: data.spaceId,
-        status: { notIn: ["CANCELLED"] },
-        OR: [
-          { startDatetime: { lt: end }, endDatetime: { gt: start } },
-        ],
-      },
+    // Check space and teacher conflicts
+    const conflict = await checkBookingConflicts({
+      spaceId:       data.spaceId,
+      teacherId,
+      startDatetime: start,
+      endDatetime:   end,
     });
 
-    if (overlap) {
-      return NextResponse.json(
-        { error: "Conflicto de horario en este espacio" },
-        { status: 409 }
-      );
+    if (conflict.hasConflict) {
+      return NextResponse.json({ error: conflict.reason }, { status: 409 });
     }
 
     const teacher = await prisma.teacher.findUnique({
@@ -63,15 +60,17 @@ export async function POST(req: NextRequest) {
     const booking = await prisma.booking.create({
       data: {
         teacherId,
-        spaceId: data.spaceId,
-        activityId: data.activityId,
+        spaceId:      data.spaceId,
+        activityId:   data.activityId,
         startDatetime: start,
-        endDatetime: end,
-        clientId: data.clientId,
-        notes: data.notes,
-        status: data.status || "AVAILABLE",
-        color: teacher?.color,
-        createdById: session.user.id,
+        endDatetime:  end,
+        clientId:     data.clientId,
+        notes:        data.notes,
+        status:       data.status || "AVAILABLE",
+        sessionType:  data.sessionType || "INDIVIDUAL",
+        capacity:     data.capacity ?? 1,
+        color:        teacher?.color,
+        createdById:  session.user.id,
       },
       include: {
         activity: { select: { name: true } },

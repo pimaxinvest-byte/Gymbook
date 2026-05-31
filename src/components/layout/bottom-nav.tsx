@@ -15,18 +15,24 @@ type NavItem = {
 };
 
 const navItems: NavItem[] = [
-  { href: "/calendar",             label: "Calendario",  icon: Calendar,       roles: ["ADMIN", "TEACHER", "CLIENT"] },
+  // CLIENT tabs (5 max)
+  { href: "/calendar",             label: "Calendario",  icon: Calendar,       roles: ["CLIENT"] },
   { href: "/book",                 label: "Reservar",    icon: PlusCircle,     roles: ["CLIENT"] },
   { href: "/my-bookings",          label: "Mis clases",  icon: BookOpen,       roles: ["CLIENT"] },
   { href: "/credits",              label: "Créditos",    icon: CreditCard,     roles: ["CLIENT"] },
+  { href: "/settings",             label: "Ajustes",     icon: Settings,       roles: ["CLIENT"] },
+  // TEACHER tabs (5 max)
+  { href: "/calendar",             label: "Calendario",  icon: Calendar,       roles: ["TEACHER"] },
   { href: "/teacher/schedule",     label: "Planning",    icon: CalendarCheck,  roles: ["TEACHER"] },
   { href: "/teacher/availability", label: "Disponib.",   icon: PlusCircle,     roles: ["TEACHER"] },
   { href: "/teacher/clients",      label: "Clientes",    icon: UserCircle,     roles: ["TEACHER"] },
-  { href: "/credits",              label: "Créditos",    icon: CreditCard,     roles: ["TEACHER"] },
+  { href: "/settings",             label: "Ajustes",     icon: Settings,       roles: ["TEACHER"] },
+  // ADMIN tabs (5 max)
   { href: "/admin/dashboard",      label: "Dashboard",   icon: LayoutDashboard,roles: ["ADMIN"] },
+  { href: "/calendar",             label: "Calendario",  icon: Calendar,       roles: ["ADMIN"] },
   { href: "/admin/teachers",       label: "Equipo",      icon: Users,          roles: ["ADMIN"] },
-  { href: "/credits",              label: "Créditos",    icon: CreditCard,     roles: ["ADMIN"] },
-  { href: "/settings",             label: "Ajustes",     icon: Settings,       roles: ["ADMIN", "TEACHER", "CLIENT"] },
+  { href: "/admin/clients",        label: "Clientes",    icon: UserCircle,     roles: ["ADMIN"] },
+  { href: "/settings",             label: "Ajustes",     icon: Settings,       roles: ["ADMIN"] },
 ];
 
 export function BottomNav() {

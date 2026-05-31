@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
-import { Loader2, Save, Send, Shield } from "lucide-react";
+import { Loader2, Save, Send, Shield, MessageCircle, ExternalLink } from "lucide-react";
 import { toast } from "@/components/ui/toaster";
 import { useSession } from "next-auth/react";
 
@@ -26,6 +26,7 @@ interface Settings {
 
 interface TelegramSettings {
   botToken: string;
+  botName: string;
   adminChatId: string;
   notifyAdmin: boolean;
   notifyTeacher: boolean;
@@ -37,6 +38,8 @@ interface Profile {
   email: string;
   avatarUrl?: string | null;
   telegramChatId?: string | null;
+  telegramConnected?: boolean;
+  telegramUsername?: string | null;
 }
 
 export default function SettingsPage() {
@@ -51,6 +54,7 @@ export default function SettingsPage() {
   const [savingTelegram, setSavingTelegram] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [testingTelegram, setTestingTelegram] = useState(false);
+  const [connectingTelegram, setConnectingTelegram] = useState(false);
 
   useEffect(() => {
     const promises: Promise<void>[] = [
@@ -105,6 +109,23 @@ export default function SettingsPage() {
     setSavingProfile(false);
   }
 
+  async function connectTelegram() {
+    setConnectingTelegram(true);
+    const res = await fetch("/api/telegram/connect", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    if (res.ok) {
+      const { url } = await res.json();
+      window.open(url, "_blank");
+      toast({ title: "Enlace de Telegram abierto. Escribe /start en el bot.", variant: "success" });
+    } else {
+      toast({ title: "Error: configura el bot de Telegram en ajustes admin", variant: "error" });
+    }
+    setConnectingTelegram(false);
+  }
+
   if (loading) {
     return (
       <AppShell title="Ajustes">
@@ -136,13 +157,22 @@ export default function SettingsPage() {
               <div>
                 <p className="font-semibold text-gray-900">{profile.name}</p>
                 <p className="text-sm text-gray-500">{profile.email}</p>
-                {profile.telegramChatId ? (
+                {profile.telegramConnected ? (
                   <div className="flex items-center gap-1.5 mt-1">
                     <span className="w-2 h-2 rounded-full bg-blue-500" aria-hidden="true" />
-                    <span className="text-xs text-blue-600 font-medium">Telegram conectado</span>
+                    <span className="text-xs text-blue-600 font-medium">
+                      Telegram {profile.telegramUsername ? `(${profile.telegramUsername})` : "conectado"}
+                    </span>
                   </div>
                 ) : (
-                  <p className="text-xs text-gray-400 mt-1">Telegram no conectado</p>
+                  <button
+                    onClick={connectTelegram}
+                    disabled={connectingTelegram}
+                    className="flex items-center gap-1.5 mt-1 text-xs font-semibold text-blue-600 hover:text-blue-700 cursor-pointer disabled:opacity-50"
+                  >
+                    {connectingTelegram ? <Loader2 className="h-3 w-3 animate-spin" /> : <MessageCircle className="h-3 w-3" />}
+                    Conectar Telegram
+                  </button>
                 )}
               </div>
             </div>
@@ -152,12 +182,20 @@ export default function SettingsPage() {
               value={profile.name || ""}
               onChange={(e) => setProfile((p) => ({ ...p, name: e.target.value }))}
             />
-            <Input
-              label="Telegram Chat ID"
-              value={profile.telegramChatId || ""}
-              placeholder="Ej: 123456789 (obtén tu ID con @userinfobot)"
-              onChange={(e) => setProfile((p) => ({ ...p, telegramChatId: e.target.value || null }))}
-            />
+            {/* Telegram connect button (full width) */}
+            <button
+              onClick={connectTelegram}
+              disabled={connectingTelegram}
+              className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 font-semibold text-sm transition-colors cursor-pointer disabled:opacity-50 ${
+                profile.telegramConnected
+                  ? "border-blue-200 bg-blue-50 text-blue-600"
+                  : "border-dashed border-blue-300 text-blue-600 hover:bg-blue-50"
+              }`}
+            >
+              {connectingTelegram ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
+              {profile.telegramConnected ? "Reconectar Telegram" : "Conectar Telegram"}
+              <ExternalLink className="h-3.5 w-3.5 opacity-60" />
+            </button>
 
             <Button size="lg" className="w-full" onClick={saveProfile} disabled={savingProfile}>
               {savingProfile ? <Loader2 className="h-5 w-5 animate-spin" /> : <><Save className="h-4 w-4" /> Guardar perfil</>}
@@ -244,7 +282,8 @@ export default function SettingsPage() {
             <Card>
               <CardHeader><CardTitle>Telegram Bot</CardTitle></CardHeader>
               <CardContent className="space-y-3">
-                <Input label="Bot Token" type="password" placeholder="Token actual enmascarado" value={telegram.botToken || ""} onChange={(e) => setTelegram((t) => ({ ...t, botToken: e.target.value }))} />
+                <Input label="Bot Token" type="password" placeholder="Token del bot (enmascarado)" value={telegram.botToken || ""} onChange={(e) => setTelegram((t) => ({ ...t, botToken: e.target.value }))} />
+                <Input label="Nombre del bot (sin @)" value={telegram.botName || ""} placeholder="Ej: Daddysgymbook_bot" onChange={(e) => setTelegram((t) => ({ ...t, botName: e.target.value }))} />
                 <Input label="Chat ID del administrador" value={telegram.adminChatId || ""} placeholder="Ej: 123456789" onChange={(e) => setTelegram((t) => ({ ...t, adminChatId: e.target.value }))} />
 
                 <div className="space-y-2">
@@ -281,10 +320,11 @@ export default function SettingsPage() {
               <CardHeader><CardTitle>Gestión</CardTitle></CardHeader>
               <CardContent className="space-y-0">
                 {[
-                  { href: "/admin/teachers", label: "Profesores" },
-                  { href: "/admin/spaces", label: "Espacios" },
+                  { href: "/admin/dashboard",  label: "Dashboard" },
+                  { href: "/admin/teachers",   label: "Profesores" },
+                  { href: "/admin/clients",    label: "Clientes" },
+                  { href: "/admin/spaces",     label: "Espacios" },
                   { href: "/admin/activities", label: "Actividades" },
-                  { href: "/admin/dashboard", label: "Dashboard" },
                 ].map((item) => (
                   <a key={item.href} href={item.href} className="flex items-center justify-between py-3 border-b border-gray-50 last:border-0 text-sm font-medium text-gray-800 hover:text-orange-500 transition-colors">
                     {item.label}

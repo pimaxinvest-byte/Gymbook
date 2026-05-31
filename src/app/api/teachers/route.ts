@@ -9,7 +9,10 @@ export async function GET() {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const teachers = await prisma.teacher.findMany({
-    include: { user: { select: { id: true, name: true, email: true, telegramChatId: true, avatarUrl: true } } },
+    include: {
+      user: { select: { id: true, name: true, email: true, telegramChatId: true, telegramConnected: true, telegramUsername: true, avatarUrl: true } },
+      teacherActivities: { include: { activity: { select: { id: true, name: true, color: true } } } },
+    },
     orderBy: { user: { name: "asc" } },
   });
 
