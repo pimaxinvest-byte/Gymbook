@@ -525,16 +525,29 @@ async function resolveSessionTypes(
 }
 
 async function getDefaultActivityId(teacherId: string): Promise<string | null> {
+  // Prefer "Entrenamiento Personal" by name (case-insensitive)
+  const preferred = await prisma.activity.findFirst({
+    where: { name: { equals: "Entrenamiento Personal", mode: "insensitive" }, isActive: true },
+  });
+  if (preferred) return preferred.id;
+
+  // Fallback: first activity assigned to this teacher
   const ta = await prisma.teacherActivity.findFirst({
-    where: { teacherId },
-    include: { activity: true },
+    where: { teacherId, activity: { isActive: true } },
   });
   return ta?.activityId ?? null;
 }
 
 async function getDefaultSpaceId(tx: typeof prisma): Promise<string> {
-  const space = await tx.space.findFirst({ orderBy: { createdAt: "asc" } });
-  if (!space) throw new Error("No spaces configured in GymBook");
+  // Prefer space named "SALA" (case-insensitive)
+  const preferred = await tx.space.findFirst({
+    where: { name: { equals: "SALA", mode: "insensitive" }, isActive: true },
+  });
+  if (preferred) return preferred.id;
+
+  // Fallback: first active space
+  const space = await tx.space.findFirst({ where: { isActive: true }, orderBy: { createdAt: "asc" } });
+  if (!space) throw new Error("No hay espacios configurados en GymBook");
   return space.id;
 }
 
