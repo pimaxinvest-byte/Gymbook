@@ -1,26 +1,117 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --primary: #6366f1;
+  --primary-dark: #4f46e5;
+  --secondary: #8b5cf6;
+  --accent: #a78bfa;
+  --background: #f8fafc;
+  --surface: #ffffff;
+  --foreground: #0f172a;
+  --muted: #64748b;
+  --border: #e2e8f0;
+  --radius: 12px;
+  --nav-height: 64px;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  scroll-behavior: smooth;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  overscroll-behavior: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Mobile bottom nav safe area */
+.pb-nav {
+  padding-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom));
+}
+
+/* FullCalendar overrides */
+.fc {
+  font-family: inherit !important;
+}
+
+.fc-toolbar-title {
+  font-size: 1rem !important;
+  font-weight: 700 !important;
+  text-transform: capitalize;
+}
+
+.fc-button {
+  background: var(--primary) !important;
+  border-color: var(--primary) !important;
+  border-radius: 8px !important;
+  font-size: 0.8rem !important;
+  padding: 4px 10px !important;
+}
+
+.fc-button:hover {
+  background: var(--primary-dark) !important;
+  border-color: var(--primary-dark) !important;
+}
+
+.fc-button-active {
+  background: var(--primary-dark) !important;
+}
+
+.fc-event {
+  border-radius: 6px !important;
+  border: none !important;
+  padding: 2px 4px !important;
+  cursor: pointer !important;
+  font-size: 0.75rem !important;
+}
+
+.fc-daygrid-event {
+  margin: 1px 2px !important;
+}
+
+.fc-timegrid-event .fc-event-main {
+  padding: 2px 4px !important;
+}
+
+.fc-col-header-cell-cushion,
+.fc-daygrid-day-number {
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.fc-day-today {
+  background: rgba(99, 102, 241, 0.05) !important;
+}
+
+.fc-scrollgrid {
+  border-radius: var(--radius) !important;
+  overflow: hidden;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+/* Animation */
+@keyframes slideUp {
+  from { transform: translateY(10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.animate-slideUp {
+  animation: slideUp 0.2s ease-out;
 }

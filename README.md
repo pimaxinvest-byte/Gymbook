@@ -1,36 +1,62 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# GymBook — Sistema de Reservas para Gimnasios
 
-## Getting Started
+App full-stack mobile-first para gestionar reservas de espacios y sesiones en un gimnasio.
 
-First, run the development server:
+## Stack
+
+- **Frontend/Backend**: Next.js 16 (App Router)
+- **Base de datos**: PostgreSQL (Railway)
+- **ORM**: Prisma 5
+- **Auth**: NextAuth.js v5
+- **UI**: Tailwind CSS + Radix UI
+- **Calendario**: FullCalendar
+- **Notificaciones**: Telegram Bot API
+
+## Instalación local
+
+### 1. Variables de entorno
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env.local
+# Edita .env.local con tus valores
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Instalar y configurar
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm install
+npm run db:push     # Crear tablas
+npm run db:seed     # Datos de ejemplo
+npm run dev         # http://localhost:3000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Cuentas de demo
 
-## Learn More
+| Rol | Email | Contraseña |
+|-----|-------|-----------|
+| Admin | admin@gymbook.com | admin123 |
+| Profesor | carlos@gymbook.com | teacher123 |
+| Cliente | ana@example.com | client123 |
 
-To learn more about Next.js, take a look at the following resources:
+## Deploy en Railway
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Crea un proyecto en Railway con plugin PostgreSQL
+2. Añade las variables de entorno (ver `.env.example`)
+3. Build: `npm run build` · Start: `npm run start`
+4. Ejecuta migraciones: `railway run npm run db:migrate && railway run npm run db:seed`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Estructura
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+src/app/
+├── (auth)/login + register    # Autenticación
+├── admin/dashboard            # Stats y gestión
+├── admin/teachers             # Gestión de profesores  
+├── admin/spaces               # Gestión de espacios
+├── admin/activities           # Gestión de actividades
+├── calendar/                  # Calendario principal
+├── book/                      # Reservar sesión (cliente)
+├── my-bookings/               # Mis reservas
+├── settings/                  # Configuración + Telegram
+└── api/                       # API routes completas
+```
