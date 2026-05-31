@@ -98,7 +98,7 @@ export default function LoginPage() {
 
         {/* Footer credits */}
         <p className="text-center text-xs text-gray-400 mt-6">
-          GymBook v1.0.0 · Creado por Pietro
+          GymBook v1.2.0 · Creado por Pietro
         </p>
       </div>
     </div>

@@ -336,7 +336,7 @@ export default function SettingsPage() {
           </>
         )}
 
-        <p className="text-center text-xs text-gray-400 pb-4">GymBook v1.0.0 · Creado por Pietro</p>
+        <p className="text-center text-xs text-gray-400 pb-4">GymBook v1.2.0 · Creado por Pietro</p>
       </div>
     </AppShell>
   );
