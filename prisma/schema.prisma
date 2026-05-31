@@ -1,0 +1,187 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  TEACHER
+  CLIENT
+}
+
+enum BookingStatus {
+  AVAILABLE
+  BOOKED
+  CANCELLED
+  COMPLETED
+  BLOCKED
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String
+  name          String
+  role          Role      @default(CLIENT)
+  telegramChatId String?
+  avatarUrl     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  teacher       Teacher?
+  client        Client?
+  createdBookings Booking[] @relation("CreatedBy")
+}
+
+model Teacher {
+  id          String    @id @default(cuid())
+  userId      String    @unique
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  color       String    @default("#6366f1")
+  bio         String?
+  specialties String[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  bookings    Booking[]
+  availabilitySlots AvailabilitySlot[]
+}
+
+model Client {
+  id          String    @id @default(cuid())
+  userId      String    @unique
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  bookings    Booking[]
+}
+
+model Space {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  capacity    Int       @default(1)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  bookings    Booking[]
+  availabilitySlots AvailabilitySlot[]
+}
+
+model Activity {
+  id              String    @id @default(cuid())
+  name            String
+  description     String?
+  defaultDuration Int       @default(60)
+  maxCapacity     Int       @default(1)
+  color           String?
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  bookings        Booking[]
+  availabilitySlots AvailabilitySlot[]
+}
+
+model Booking {
+  id              String        @id @default(cuid())
+  teacherId       String
+  teacher         Teacher       @relation(fields: [teacherId], references: [id])
+  clientId        String?
+  client          Client?       @relation(fields: [clientId], references: [id])
+  spaceId         String
+  space           Space         @relation(fields: [spaceId], references: [id])
+  activityId      String
+  activity        Activity      @relation(fields: [activityId], references: [id])
+  startDatetime   DateTime
+  endDatetime     DateTime
+  status          BookingStatus @default(AVAILABLE)
+  color           String?
+  notes           String?
+  recurrenceRuleId String?
+  recurrenceRule  BookingRecurrenceRule? @relation(fields: [recurrenceRuleId], references: [id])
+  createdById     String
+  createdBy       User          @relation("CreatedBy", fields: [createdById], references: [id])
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  notifications   NotificationLog[]
+}
+
+model BookingRecurrenceRule {
+  id          String    @id @default(cuid())
+  daysOfWeek  Int[]
+  startTime   String
+  endTime     String
+  startDate   DateTime
+  endDate     DateTime
+  spaceId     String
+  activityId  String
+  teacherId   String
+  createdAt   DateTime  @default(now())
+
+  bookings    Booking[]
+}
+
+model AvailabilitySlot {
+  id          String    @id @default(cuid())
+  teacherId   String
+  teacher     Teacher   @relation(fields: [teacherId], references: [id])
+  spaceId     String
+  space       Space     @relation(fields: [spaceId], references: [id])
+  activityId  String
+  activity    Activity  @relation(fields: [activityId], references: [id])
+  startDatetime DateTime
+  endDatetime   DateTime
+  maxCapacity   Int     @default(1)
+  minDuration   Int     @default(30)
+  maxDuration   Int     @default(120)
+  isRecurring   Boolean @default(false)
+  daysOfWeek    Int[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model AppSettings {
+  id                    String  @id @default(cuid())
+  gymName               String  @default("Mi Gimnasio")
+  logoUrl               String?
+  primaryColor          String  @default("#6366f1")
+  secondaryColor        String  @default("#8b5cf6")
+  accentColor           String  @default("#a78bfa")
+  defaultSessionDuration Int    @default(60)
+  openingTime           String  @default("06:00")
+  closingTime           String  @default("22:00")
+  bookingConfirmationText String @default("¡Tu reserva ha sido confirmada!")
+  cancellationHoursLimit Int    @default(24)
+  updatedAt             DateTime @updatedAt
+}
+
+model TelegramSettings {
+  id              String  @id @default(cuid())
+  botToken        String?
+  adminChatId     String?
+  notifyAdmin     Boolean @default(true)
+  notifyTeacher   Boolean @default(true)
+  notifyClient    Boolean @default(true)
+  updatedAt       DateTime @updatedAt
+}
+
+model NotificationLog {
+  id          String    @id @default(cuid())
+  bookingId   String
+  booking     Booking   @relation(fields: [bookingId], references: [id])
+  type        String
+  recipient   String
+  message     String
+  success     Boolean
+  error       String?
+  createdAt   DateTime  @default(now())
+}
