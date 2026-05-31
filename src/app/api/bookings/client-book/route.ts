@@ -139,6 +139,21 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    const oldBalance = creditRecord!.balance;
+    await tx.creditLog.create({
+      data: {
+        clientCreditsId: creditRecord!.id,
+        clientId: client.id,
+        actionType: "CREDIT_USED",
+        previousValueJson: { balance: oldBalance },
+        newValueJson: { balance: oldBalance - 1 },
+        amount: -1,
+        performedById: session.user.id,
+        bookingId: result.id,
+        notes: `Sesión reservada: ${booking.startDatetime.toISOString()}`,
+      },
+    });
+
     return result;
   });
 

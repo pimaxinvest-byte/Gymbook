@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Calendar, PlusCircle, Users, BookOpen, Settings, LayoutDashboard, CreditCard, CalendarCheck, UserCircle } from "lucide-react";
+import { Calendar, PlusCircle, Users, BookOpen, Settings, LayoutDashboard, CreditCard, CalendarCheck, UserCircle, BarChart2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSession } from "next-auth/react";
 import type { Role } from "@prisma/client";

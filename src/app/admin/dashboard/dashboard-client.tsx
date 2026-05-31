@@ -37,6 +37,7 @@ export function AdminDashboardClient() {
         {/* Quick links */}
         <div className="grid grid-cols-2 gap-3">
           {[
+            { href: "/admin/stats", label: "Estadísticas", icon: BarChart2 },
             { href: "/admin/teachers", label: "Profesores", icon: Users },
             { href: "/admin/spaces", label: "Espacios", icon: MapPinIcon },
             { href: "/admin/activities", label: "Actividades", icon: Activity },

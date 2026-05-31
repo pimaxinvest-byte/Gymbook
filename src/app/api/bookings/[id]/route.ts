@@ -82,6 +82,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       updated = await prisma.$transaction(async (tx) => {
         const result = await tx.booking.update({ where: { id }, data: body });
 
+        const balanceBefore = creditRecord.balance;
+
         await tx.clientCredits.update({
           where: { id: creditRecord.id },
           data: { balance: { increment: 1 } },
@@ -95,6 +97,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             bookingId: id,
             note: `Cancelación a tiempo de ${booking.activity.name}`,
             createdById: session.user.id,
+          },
+        });
+
+        await tx.creditLog.create({
+          data: {
+            clientCreditsId: creditRecord.id,
+            clientId: booking.clientId!,
+            actionType: "CREDIT_RESTORED",
+            previousValueJson: { balance: balanceBefore },
+            newValueJson: { balance: balanceBefore + 1 },
+            amount: 1,
+            performedById: session.user.id,
+            bookingId: id,
+            notes: `Crédito restaurado por cancelación a tiempo de ${booking.activity.name}`,
           },
         });
 

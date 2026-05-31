@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { CreditType } from "@prisma/client";
+import { CreditType, PaymentStatus, PaymentMethod } from "@prisma/client";
 
 // GET /api/credits?clientId=...&teacherId=...&creditType=...
 export async function GET(req: NextRequest) {
@@ -45,6 +45,11 @@ export async function GET(req: NextRequest) {
         take: 20,
         include: { createdBy: { select: { name: true } } },
       },
+      creditLogs: {
+        orderBy: { createdAt: "desc" },
+        take: 10,
+        include: { performedBy: { select: { name: true } } },
+      },
     },
     orderBy: { updatedAt: "desc" },
   });
@@ -69,7 +74,18 @@ export async function POST(req: NextRequest) {
   if (role === "CLIENT") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json();
-  const { clientId, teacherId, amount, note, creditType = "INDIVIDUAL" } = body;
+  const {
+    clientId,
+    teacherId,
+    amount,
+    note,
+    creditType = "INDIVIDUAL",
+    paymentStatus,
+    amountPaid,
+    paymentMethod,
+    paymentDate,
+    notes,
+  } = body;
 
   if (!clientId || typeof amount !== "number" || amount === 0) {
     return NextResponse.json({ error: "clientId and non-zero amount are required" }, { status: 400 });
@@ -94,6 +110,15 @@ export async function POST(req: NextRequest) {
     : undefined;
 
   const result = await prisma.$transaction(async (tx) => {
+    // Build payment fields for create
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const paymentCreate: any = {};
+    if (paymentStatus) paymentCreate.paymentStatus = paymentStatus as PaymentStatus;
+    if (amountPaid !== undefined) paymentCreate.amountPaid = amountPaid;
+    if (paymentMethod) paymentCreate.paymentMethod = paymentMethod as PaymentMethod;
+    if (paymentDate) paymentCreate.paymentDate = new Date(paymentDate);
+    if (notes) paymentCreate.notes = notes;
+
     const credits = await tx.clientCredits.upsert({
       where: {
         clientId_teacherId_creditType: {
@@ -108,19 +133,36 @@ export async function POST(req: NextRequest) {
         creditType: creditType as CreditType,
         balance: 0,
         expiresAt: amount > 0 ? expiresAt : null,
+        createdById: session.user.id,
+        totalAssigned: amount > 0 ? amount : 0,
+        ...paymentCreate,
       },
       update: {},
     });
 
-    const newBalance = credits.balance + amount;
+    const previousBalance = credits.balance;
+    const previousPaymentStatus = credits.paymentStatus;
+    const previousAmountPaid = credits.amountPaid;
+
+    const newBalance = previousBalance + amount;
     if (newBalance < 0) throw new Error("Insufficient credits");
+
+    // Build update data
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const updateData: any = {
+      balance: newBalance,
+      ...(amount > 0 && expiresAt ? { expiresAt } : {}),
+      ...(amount > 0 ? { totalAssigned: { increment: amount } } : {}),
+    };
+    if (paymentStatus) updateData.paymentStatus = paymentStatus as PaymentStatus;
+    if (amountPaid !== undefined) updateData.amountPaid = amountPaid;
+    if (paymentMethod) updateData.paymentMethod = paymentMethod as PaymentMethod;
+    if (paymentDate) updateData.paymentDate = new Date(paymentDate);
+    if (notes) updateData.notes = notes;
 
     const updated = await tx.clientCredits.update({
       where: { id: credits.id },
-      data: {
-        balance: newBalance,
-        ...(amount > 0 && expiresAt ? { expiresAt } : {}),
-      },
+      data: updateData,
     });
 
     await tx.creditTransaction.create({
@@ -130,6 +172,27 @@ export async function POST(req: NextRequest) {
         type: amount > 0 ? "ASSIGNED" : "DEDUCTED",
         note: note ?? null,
         createdById: session.user.id,
+      },
+    });
+
+    await tx.creditLog.create({
+      data: {
+        clientCreditsId: credits.id,
+        clientId,
+        actionType: amount > 0 ? "CREATED" : "ADJUSTED",
+        previousValueJson: {
+          balance: previousBalance,
+          paymentStatus: previousPaymentStatus,
+          amountPaid: previousAmountPaid,
+        },
+        newValueJson: {
+          balance: newBalance,
+          paymentStatus: updated.paymentStatus,
+          amountPaid: updated.amountPaid,
+        },
+        amount,
+        performedById: session.user.id,
+        notes: note ?? null,
       },
     });
 

@@ -174,6 +174,21 @@ export async function POST(req: NextRequest) {
         createdById: session.user.id,
       },
     });
+
+    const oldBalance = creditRecord!.balance;
+    await tx.creditLog.create({
+      data: {
+        clientCreditsId: creditRecord!.id,
+        clientId: client.id,
+        actionType: "CREDIT_USED",
+        previousValueJson: { balance: oldBalance },
+        newValueJson: { balance: oldBalance - 1 },
+        amount: -1,
+        performedById: session.user.id,
+        bookingId,
+        notes: `Sesión reservada: ${booking.startDatetime.toISOString()}`,
+      },
+    });
   });
 
   // Telegram notifications (non-blocking)
