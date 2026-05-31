@@ -5,7 +5,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { GymCalendar } from "@/components/calendar/gym-calendar";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { CalendarPlus, Clock, Download, Loader2, Plus } from "lucide-react";
+import { CalendarPlus, Clock, Download, Loader2, Plus, Timer } from "lucide-react";
 import { toast } from "@/components/ui/toaster";
 
 interface Activity { id: string; name: string }
@@ -15,11 +15,29 @@ const DAYS_SHORT = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 // FC convention: 0=Sun 1=Mon … 6=Sat  →  display order Mon–Sun
 const FC_DAYS_ORDERED = [1, 2, 3, 4, 5, 6, 0];
 
-function addMinutes(time: string, m: number) {
-  const [h, min] = time.split(":").map(Number);
-  const t = h * 60 + min + m;
-  return `${String(Math.floor(t / 60) % 24).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
+function timeToMins(t: string) {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
 }
+function minsToTime(mins: number) {
+  return `${String(Math.floor(mins / 60) % 24).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
+}
+function computeSlotPreviews(startTime: string, endTime: string, slotDuration: number): string[] {
+  const out: string[] = [];
+  let t = timeToMins(startTime);
+  const end = timeToMins(endTime);
+  while (t + slotDuration <= end) {
+    out.push(`${minsToTime(t)}–${minsToTime(t + slotDuration)}`);
+    t += slotDuration;
+  }
+  return out;
+}
+const SLOT_DURATIONS = [
+  { value: 30, label: "30 min" },
+  { value: 45, label: "45 min" },
+  { value: 60, label: "1 hora" },
+  { value: 90, label: "1 h 30" },
+];
 
 export default function TeacherSchedulePage() {
   const [refreshKey, setRefreshKey] = useState(0);
@@ -142,7 +160,7 @@ export default function TeacherSchedulePage() {
 
 // ── Inline availability modal (recurring slots) ───────────────────────────────
 function AddAvailabilityModal({
-  activities, spaces, loading, onClose, onSaved,
+  activities, spaces, loading: loadingMeta, onClose, onSaved,
 }: {
   activities: Activity[];
   spaces:     Space[];
@@ -152,26 +170,27 @@ function AddAvailabilityModal({
 }) {
   const [selectedDays, setSelectedDays] = useState<number[]>([1]);
   const [startTime,    setStartTime]    = useState("09:00");
+  const [endTime,      setEndTime]      = useState("13:00");
+  const [slotDuration, setSlotDuration] = useState(60);
   const [activityId,   setActivityId]   = useState("");
   const [spaceId,      setSpaceId]      = useState("");
   const [sessionType,  setSessionType]  = useState<"INDIVIDUAL" | "SGT">("INDIVIDUAL");
   const [saving,       setSaving]       = useState(false);
 
-  // Default selects when data arrives
-  const prevActs = activities.length;
   useEffect(() => { if (activities.length && !activityId) setActivityId(activities[0].id); }, [activities, activityId]);
   useEffect(() => { if (spaces.length    && !spaceId)    setSpaceId(spaces[0].id);         }, [spaces,     spaceId]);
-  void prevActs;
-
-  const endTime = addMinutes(startTime, 60);
 
   function toggleDay(d: number) {
     setSelectedDays((p) => p.includes(d) ? p.filter((x) => x !== d) : [...p, d]);
   }
 
+  const previews   = computeSlotPreviews(startTime, endTime, slotDuration);
+  const rangeValid = timeToMins(endTime) - timeToMins(startTime) >= slotDuration;
+
   async function handleSave() {
     if (!selectedDays.length) { toast({ title: "Selecciona al menos un día", variant: "error" }); return; }
     if (!activityId || !spaceId) { toast({ title: "Selecciona actividad y espacio", variant: "error" }); return; }
+    if (!rangeValid) { toast({ title: `La franja debe ser de al menos ${slotDuration} min`, variant: "error" }); return; }
 
     setSaving(true);
     const today     = new Date();
@@ -185,6 +204,7 @@ function AddAvailabilityModal({
         daysOfWeek:  selectedDays,
         startTime,
         endTime,
+        slotDuration,
         startDate:   today.toISOString(),
         endDate:     sixMonths.toISOString(),
         activityId,
@@ -197,7 +217,7 @@ function AddAvailabilityModal({
     if (res.ok) {
       const d = await res.json();
       toast({
-        title: `✓ ${d.created} franjas creadas`,
+        title: `✓ ${d.created} sesiones creadas`,
         description: d.skipped ? `${d.skipped} omitidas por conflicto` : "Para los próximos 6 meses",
         variant: "success",
       });
@@ -211,15 +231,15 @@ function AddAvailabilityModal({
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-sm mx-4">
+      <DialogContent className="max-w-sm mx-4 max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CalendarPlus className="h-5 w-5 text-orange-500" />
-            Nueva disponibilidad recurrente
+            Nueva franja horaria recurrente
           </DialogTitle>
         </DialogHeader>
 
-        {loading ? (
+        {loadingMeta ? (
           <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-orange-400" /></div>
         ) : (
           <div className="space-y-4">
@@ -244,21 +264,75 @@ function AddAvailabilityModal({
               </div>
             </div>
 
-            {/* Time */}
+            {/* Time range */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5" htmlFor="av-start">
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
                 <Clock className="h-3.5 w-3.5 inline mr-1" />
-                Hora de inicio
+                Franja horaria *
               </label>
-              <input
-                id="av-start"
-                type="time"
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
-                className="w-full h-12 rounded-xl border-2 border-gray-200 px-3 text-sm focus:outline-none focus:border-orange-400"
-              />
-              <p className="text-xs text-gray-400 mt-1">Fin automático: {endTime} (60 min)</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">Inicio</p>
+                  <input
+                    type="time"
+                    value={startTime}
+                    onChange={(e) => setStartTime(e.target.value)}
+                    className="w-full h-12 rounded-xl border-2 border-gray-200 px-3 text-sm focus:outline-none focus:border-orange-400"
+                  />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">Fin</p>
+                  <input
+                    type="time"
+                    value={endTime}
+                    onChange={(e) => setEndTime(e.target.value)}
+                    className={`w-full h-12 rounded-xl border-2 px-3 text-sm focus:outline-none ${
+                      rangeValid ? "border-gray-200 focus:border-orange-400" : "border-red-300"
+                    }`}
+                  />
+                </div>
+              </div>
             </div>
+
+            {/* Slot duration */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <Timer className="h-3.5 w-3.5 inline mr-1" />
+                Duración de cada sesión
+              </label>
+              <div className="grid grid-cols-4 gap-1.5">
+                {SLOT_DURATIONS.map((d) => (
+                  <button
+                    key={d.value}
+                    type="button"
+                    onClick={() => setSlotDuration(d.value)}
+                    className={`h-10 rounded-xl text-xs font-semibold border-2 transition-colors cursor-pointer ${
+                      slotDuration === d.value
+                        ? "border-orange-500 bg-orange-50 text-orange-700"
+                        : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                    }`}
+                  >
+                    {d.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Preview */}
+            {rangeValid && previews.length > 0 && (
+              <div className="rounded-xl bg-orange-50 border border-orange-200 p-3">
+                <p className="text-xs font-semibold text-orange-700 mb-2">
+                  Sesiones por día ({previews.length}):
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {previews.map((p) => (
+                    <span key={p} className="text-xs font-mono bg-white border border-orange-200 text-orange-800 rounded-lg px-2 py-1">
+                      {p}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Session type */}
             <div>
@@ -307,8 +381,10 @@ function AddAvailabilityModal({
               </select>
             </div>
 
-            <Button size="lg" className="w-full" onClick={handleSave} disabled={saving}>
-              {saving ? <Loader2 className="h-5 w-5 animate-spin" /> : <><CalendarPlus className="h-4 w-4" /> Crear disponibilidad</>}
+            <Button size="lg" className="w-full" onClick={handleSave} disabled={saving || !rangeValid}>
+              {saving
+                ? <Loader2 className="h-5 w-5 animate-spin" />
+                : <><CalendarPlus className="h-4 w-4" /> Crear franja ({previews.length} ses/día)</>}
             </Button>
           </div>
         )}

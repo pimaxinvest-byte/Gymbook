@@ -23,11 +23,33 @@ interface CreateBookingModalProps {
 
 const DAYS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
+function timeToMins(t: string) {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
+}
 function addMinutes(time: string, minutes: number) {
-  const [h, m] = time.split(":").map(Number);
-  const total = h * 60 + m + minutes;
+  const total = timeToMins(time) + minutes;
   return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
 }
+function minsToTime(mins: number) {
+  return `${String(Math.floor(mins / 60) % 24).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
+}
+function slotPreviews(startTime: string, endTime: string, slotDuration: number): string[] {
+  const out: string[] = [];
+  let t = timeToMins(startTime);
+  const end = timeToMins(endTime);
+  while (t + slotDuration <= end) {
+    out.push(`${minsToTime(t)}–${minsToTime(t + slotDuration)}`);
+    t += slotDuration;
+  }
+  return out;
+}
+const SLOT_DURATIONS = [
+  { value: 30, label: "30 min" },
+  { value: 45, label: "45 min" },
+  { value: 60, label: "1 hora" },
+  { value: 90, label: "1 h 30" },
+];
 
 export function CreateBookingModal({
   onClose,
@@ -47,6 +69,9 @@ export function CreateBookingModal({
 
   void userId; // available for future use
 
+  const [slotDuration, setSlotDuration] = useState(60); // minutes per slot
+  const [rangeEndTime, setRangeEndTime] = useState("13:00"); // recurring: end of range
+
   const [form, setForm] = useState({
     teacherId: defaultTeacherId || "",
     spaceId: "",
@@ -59,8 +84,11 @@ export function CreateBookingModal({
     daysOfWeek: [] as number[],
   });
 
-  // Derived end time: always start + 60 min (classes are 60 min)
-  const endTime = addMinutes(form.startTime, 60);
+  // Single booking: end = start + slotDuration
+  const singleEndTime = addMinutes(form.startTime, slotDuration);
+  // Recurring: previews within the range
+  const recurPreviews = slotPreviews(form.startTime, rangeEndTime, slotDuration);
+  const rangeValid    = timeToMins(rangeEndTime) - timeToMins(form.startTime) >= slotDuration;
 
   useEffect(() => {
     fetch("/api/teachers").then((r) => r.json()).then(setTeachers);
@@ -101,25 +129,26 @@ export function CreateBookingModal({
 
     const body = isRecurring
       ? {
-          teacherId: form.teacherId,
-          spaceId: form.spaceId,
-          activityId: form.activityId,
-          startTime: form.startTime,
-          endTime,
-          startDate: form.startDate,
-          endDate: form.endDate,
-          daysOfWeek: form.daysOfWeek,
-          notes: form.notes || undefined,
+          teacherId:    form.teacherId,
+          spaceId:      form.spaceId,
+          activityId:   form.activityId,
+          startTime:    form.startTime,
+          endTime:      rangeEndTime,
+          slotDuration,
+          startDate:    form.startDate,
+          endDate:      form.endDate,
+          daysOfWeek:   form.daysOfWeek,
+          notes:        form.notes || undefined,
           sessionType,
           capacity,
         }
       : {
-          teacherId: form.teacherId,
-          spaceId: form.spaceId,
-          activityId: form.activityId,
+          teacherId:     form.teacherId,
+          spaceId:       form.spaceId,
+          activityId:    form.activityId,
           startDatetime: `${form.startDate}T${form.startTime}`,
-          endDatetime: `${form.startDate}T${endTime}`,
-          notes: form.notes || undefined,
+          endDatetime:   `${form.startDate}T${singleEndTime}`,
+          notes:         form.notes || undefined,
           sessionType,
           capacity,
         };
@@ -268,23 +297,87 @@ export function CreateBookingModal({
             <Input label="Fecha *" type="date" value={form.startDate} onChange={(e) => setForm((f) => ({ ...f, startDate: e.target.value }))} />
           )}
 
-          {/* Time */}
-          <div className="flex items-end gap-3">
-            <div className="flex-1">
-              <Input
-                label="Hora inicio *"
-                type="time"
-                value={form.startTime}
-                onChange={(e) => setForm((f) => ({ ...f, startTime: e.target.value }))}
-              />
-            </div>
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-400 mb-1.5">Fin (60 min)</label>
-              <div className="h-12 flex items-center px-4 rounded-xl bg-gray-50 border-2 border-gray-100 text-sm text-gray-500 font-medium">
-                {endTime}
-              </div>
+          {/* Duration selector — always visible */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Duración de sesión</label>
+            <div className="grid grid-cols-4 gap-1.5">
+              {SLOT_DURATIONS.map((d) => (
+                <button
+                  key={d.value}
+                  type="button"
+                  onClick={() => setSlotDuration(d.value)}
+                  className={`h-10 rounded-xl text-xs font-semibold border-2 transition-colors cursor-pointer ${
+                    slotDuration === d.value
+                      ? "border-orange-500 bg-orange-50 text-orange-700"
+                      : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  {d.label}
+                </button>
+              ))}
             </div>
           </div>
+
+          {/* Time — differs for single vs recurring */}
+          {isRecurring ? (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Franja horaria *</label>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">Inicio</p>
+                  <input
+                    type="time"
+                    value={form.startTime}
+                    onChange={(e) => setForm((f) => ({ ...f, startTime: e.target.value }))}
+                    className="w-full h-12 rounded-xl border-2 border-gray-200 px-3 text-sm focus:outline-none focus:border-orange-400"
+                  />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">Fin de franja</p>
+                  <input
+                    type="time"
+                    value={rangeEndTime}
+                    onChange={(e) => setRangeEndTime(e.target.value)}
+                    className={`w-full h-12 rounded-xl border-2 px-3 text-sm focus:outline-none ${
+                      rangeValid ? "border-gray-200 focus:border-orange-400" : "border-red-300"
+                    }`}
+                  />
+                </div>
+              </div>
+              {/* Slot preview */}
+              {rangeValid && recurPreviews.length > 0 && (
+                <div className="mt-2 rounded-xl bg-orange-50 border border-orange-200 p-2">
+                  <p className="text-xs text-orange-700 font-medium mb-1">
+                    {recurPreviews.length} sesión{recurPreviews.length !== 1 ? "es" : ""} por día:
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {recurPreviews.map((p) => (
+                      <span key={p} className="text-xs font-mono bg-white border border-orange-200 text-orange-800 rounded px-1.5 py-0.5">
+                        {p}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-end gap-3">
+              <div className="flex-1">
+                <Input
+                  label="Hora inicio *"
+                  type="time"
+                  value={form.startTime}
+                  onChange={(e) => setForm((f) => ({ ...f, startTime: e.target.value }))}
+                />
+              </div>
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-400 mb-1.5">Fin</label>
+                <div className="h-12 flex items-center px-4 rounded-xl bg-gray-50 border-2 border-gray-100 text-sm text-gray-500 font-medium">
+                  {singleEndTime}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Notes */}
           <div>

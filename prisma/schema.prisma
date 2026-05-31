@@ -262,18 +262,19 @@ model WaitlistEntry {
 }
 
 model BookingRecurrenceRule {
-  id         String   @id @default(cuid())
-  daysOfWeek Int[]
-  startTime  String
-  endTime    String
-  startDate  DateTime
-  endDate    DateTime
-  spaceId    String
-  activityId String
-  teacherId  String
-  sessionType SessionType @default(INDIVIDUAL)
-  capacity   Int         @default(1)
-  createdAt  DateTime @default(now())
+  id           String   @id @default(cuid())
+  daysOfWeek   Int[]
+  startTime    String                    // range start, e.g. "09:00"
+  endTime      String                    // range end,   e.g. "13:00"
+  slotDuration Int      @default(60)     // minutes per individual slot within the range
+  startDate    DateTime
+  endDate      DateTime
+  spaceId      String
+  activityId   String
+  teacherId    String
+  sessionType  SessionType @default(INDIVIDUAL)
+  capacity     Int         @default(1)
+  createdAt    DateTime @default(now())
 
   bookings Booking[]
 }
