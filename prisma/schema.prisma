@@ -410,15 +410,17 @@ model NotificationLog {
 // ─── Harbiz Integration ──────────────────────────────────────────────────────
 
 model TeacherHarbizConnection {
-  id           String    @id @default(cuid())
-  teacherId    String    @unique
-  teacher      Teacher   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  harbizProfId String?                   // Meteor userId del profesional en Harbiz
-  lastSyncAt   DateTime?
-  isActive     Boolean   @default(true)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  syncLogs     ExternalSyncLog[]
+  id                      String    @id @default(cuid())
+  teacherId               String    @unique
+  teacher                 Teacher   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  harbizProfId            String?                   // Meteor userId del profesional en Harbiz
+  harbizEmail             String?                   // Harbiz login email (stored for reference only)
+  harbizPasswordEncrypted String?                   // AES-256-GCM encrypted Harbiz password
+  lastSyncAt              DateTime?
+  isActive                Boolean   @default(true)
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  syncLogs                ExternalSyncLog[]
 
   @@index([teacherId])
 }

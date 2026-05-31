@@ -8,6 +8,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { decrypt } from "@/lib/encrypt";
 import { HarbizDdpClient } from "./HarbizDdpClient";
 import {
   mapClientToGymBook,
@@ -72,11 +73,26 @@ export async function runHarbizSync(opts: HarbizSyncOptions): Promise<HarbizSync
 
   try {
     // ── 1. Connect & authenticate ──────────────────────────────────────────
-    const harbizEmail = process.env.HARBIZ_EMAIL;
-    const harbizPassword = process.env.HARBIZ_PASSWORD;
+    // Credentials: prefer per-teacher DB record → fallback to env vars
+    let harbizEmail: string | undefined;
+    let harbizPassword: string | undefined;
+
+    if (connection.harbizEmail && connection.harbizPasswordEncrypted) {
+      harbizEmail = connection.harbizEmail;
+      try {
+        harbizPassword = decrypt(connection.harbizPasswordEncrypted);
+      } catch {
+        throw new Error("Error decrypting Harbiz password — check NEXTAUTH_SECRET");
+      }
+    } else {
+      harbizEmail = process.env.HARBIZ_EMAIL;
+      harbizPassword = process.env.HARBIZ_PASSWORD;
+    }
 
     if (!harbizEmail || !harbizPassword) {
-      throw new Error("HARBIZ_EMAIL and HARBIZ_PASSWORD env vars are required");
+      throw new Error(
+        "No hay credenciales Harbiz configuradas. Añade las credenciales en el perfil del profesor o configura HARBIZ_EMAIL y HARBIZ_PASSWORD como variables de entorno."
+      );
     }
 
     await harbiz.connect();

@@ -56,11 +56,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No hay profesores configurados" }, { status: 400 });
   }
 
-  // ── Env check ───────────────────────────────────────────────────────────
-  if (!process.env.HARBIZ_EMAIL || !process.env.HARBIZ_PASSWORD) {
+  // ── Credential check ────────────────────────────────────────────────────
+  // Credentials can come from either: (1) per-teacher DB record, or (2) env vars.
+  // The syncService resolves this. We just verify at least one source exists.
+  const connection = await prisma.teacherHarbizConnection.findUnique({
+    where: { teacherId },
+    select: { harbizEmail: true, harbizPasswordEncrypted: true },
+  });
+  const hasDbCreds = !!(connection?.harbizEmail && connection?.harbizPasswordEncrypted);
+  const hasEnvCreds = !!(process.env.HARBIZ_EMAIL && process.env.HARBIZ_PASSWORD);
+  if (!hasDbCreds && !hasEnvCreds) {
     return NextResponse.json(
-      { error: "Faltan HARBIZ_EMAIL o HARBIZ_PASSWORD en variables de entorno" },
-      { status: 500 }
+      { error: "No hay credenciales Harbiz configuradas para este profesor" },
+      { status: 400 }
     );
   }
 

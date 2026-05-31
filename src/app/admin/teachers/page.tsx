@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Edit2, Trash2, Loader2, X, MessageCircle, Copy, Check, Send, UserPlus, Mail, ExternalLink } from "lucide-react";
+import { Plus, Edit2, Trash2, Loader2, X, MessageCircle, Copy, Check, Send, UserPlus, Mail, ExternalLink, RefreshCw, KeyRound } from "lucide-react";
 import { CardSkeleton } from "@/components/ui/skeleton";
 import { Avatar } from "@/components/ui/avatar";
 import { toast } from "@/components/ui/toaster";
@@ -29,6 +29,7 @@ export default function TeachersPage() {
   const [inviteLink, setInviteLink] = useState<{ name: string; url: string } | null>(null);
   const [broadcasting, setBroadcasting] = useState(false);
   const [showClientInvite, setShowClientInvite] = useState(false);
+  const [harbizTeacher, setHarbizTeacher] = useState<Teacher | null>(null); // teacher whose Harbiz dialog is open
 
   async function load() {
     const [tr, ar] = await Promise.all([
@@ -165,6 +166,14 @@ export default function TeachersPage() {
                         <MessageCircle className="h-4 w-4" />
                       </button>
                       <button
+                        onClick={() => setHarbizTeacher(t)}
+                        aria-label={`Importar desde Harbiz para ${t.user.name}`}
+                        title="Importar desde Harbiz"
+                        className="w-9 h-9 flex items-center justify-center rounded-xl bg-orange-50 text-orange-500 hover:bg-orange-100 transition-colors cursor-pointer"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                      </button>
+                      <button
                         onClick={() => setEditTeacher(t)}
                         aria-label={`Editar ${t.user.name}`}
                         className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
@@ -234,6 +243,7 @@ export default function TeachersPage() {
       {editTeacher && <TeacherFormModal teacher={editTeacher} onClose={() => setEditTeacher(null)} onSaved={() => { setEditTeacher(null); load(); }} />}
       {inviteLink && <InviteLinkModal name={inviteLink.name} url={inviteLink.url} onClose={() => setInviteLink(null)} />}
       {showClientInvite && <ClientInviteModal onClose={() => setShowClientInvite(false)} />}
+      {harbizTeacher && <HarbizModal teacher={harbizTeacher} onClose={() => setHarbizTeacher(null)} />}
     </AppShell>
   );
 }
@@ -364,6 +374,244 @@ function ClientInviteModal({ onClose }: { onClose: () => void }) {
               {copiedMsg ? <><Check className="h-4 w-4" /> Copiado</> : <><Copy className="h-4 w-4" /> Copiar texto</>}
             </Button>
           </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Harbiz Modal ──────────────────────────────────────────────────────────────
+function HarbizModal({ teacher, onClose }: { teacher: Teacher; onClose: () => void }) {
+  const firstName = teacher.user.name.split(" ")[0];
+
+  // Credentials form
+  const [harbizEmail, setHarbizEmail] = useState("");
+  const [harbizPassword, setHarbizPassword] = useState("");
+  const [savingCreds, setSavingCreds] = useState(false);
+  const [credsSaved, setCredsSaved] = useState(false);
+
+  // Sync state
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<Record<string, unknown> | null>(null);
+  const [phase, setPhase] = useState<"idle" | "preview" | "confirm">("idle");
+
+  // Load existing connection on mount
+  useEffect(() => {
+    fetch(`/api/harbiz/connection?teacherId=${teacher.id}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.configured && d.harbizEmail) {
+          setHarbizEmail(d.harbizEmail);
+          setCredsSaved(true);
+        }
+      })
+      .catch(() => {/* ignore */});
+  }, [teacher.id]);
+
+  async function saveCredentials() {
+    if (!harbizEmail) { toast({ title: "Email de Harbiz requerido", variant: "error" }); return; }
+    setSavingCreds(true);
+    const r = await fetch("/api/harbiz/connection", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ teacherId: teacher.id, harbizEmail, harbizPassword: harbizPassword || undefined }),
+    });
+    if (r.ok) {
+      toast({ title: "Credenciales guardadas", variant: "success" });
+      setCredsSaved(true);
+      setHarbizPassword(""); // clear password field after save
+    } else {
+      const d = await r.json();
+      toast({ title: d.error || "Error guardando credenciales", variant: "error" });
+    }
+    setSavingCreds(false);
+  }
+
+  async function runSync(dryRun: boolean) {
+    setSyncing(true);
+    setSyncResult(null);
+    const r = await fetch(`/api/harbiz/sync?dryRun=${dryRun}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ teacherId: teacher.id }),
+    });
+    const data = await r.json();
+    setSyncing(false);
+    if (!r.ok) {
+      toast({ title: data.error || "Error en la sincronización", variant: "error" });
+      return;
+    }
+    setSyncResult(data);
+    setPhase(dryRun ? "preview" : "confirm");
+    if (!dryRun) {
+      toast({ title: "Sincronización completada", variant: "success" });
+    }
+  }
+
+  const result = syncResult as {
+    dryRun?: boolean;
+    status?: string;
+    clients?: { found: number; toCreate: number; toUpdate: number; skipped: number };
+    sessions?: { found: number; toCreate: number; skipped: number };
+    packs?: { found: number; toCreate: number };
+    errors?: string[];
+    diff?: Array<{ entity: string; action: string; harbizId: string; label: string }>;
+  } | null;
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-md mx-4 max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <RefreshCw className="h-5 w-5 text-orange-500" />
+            Importar desde Harbiz — {firstName}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {/* Credentials section */}
+          <div className="rounded-xl border-2 border-dashed border-orange-200 bg-orange-50 p-4 space-y-3">
+            <div className="flex items-center gap-1.5">
+              <KeyRound className="h-4 w-4 text-orange-600" />
+              <p className="text-xs font-semibold text-orange-700 uppercase tracking-wide">Credenciales Harbiz</p>
+            </div>
+            <Input
+              label="Email de Harbiz"
+              type="email"
+              value={harbizEmail}
+              onChange={(e) => { setHarbizEmail(e.target.value); setCredsSaved(false); }}
+              placeholder="email@ejemplo.com"
+            />
+            <Input
+              label={credsSaved ? "Nueva contraseña (dejar vacío para mantener)" : "Contraseña de Harbiz"}
+              type="password"
+              value={harbizPassword}
+              onChange={(e) => { setHarbizPassword(e.target.value); setCredsSaved(false); }}
+              placeholder={credsSaved ? "••••••••" : "Contraseña de tu cuenta Harbiz"}
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full"
+              onClick={saveCredentials}
+              disabled={savingCreds || !harbizEmail}
+            >
+              {savingCreds ? <Loader2 className="h-4 w-4 animate-spin" /> : credsSaved ? <><Check className="h-4 w-4" /> Actualizar credenciales</> : "Guardar credenciales"}
+            </Button>
+            {credsSaved && (
+              <p className="text-xs text-orange-600 text-center">
+                ✓ Credenciales guardadas (contraseña cifrada)
+              </p>
+            )}
+          </div>
+
+          {/* Sync actions */}
+          {phase === "idle" && (
+            <div className="space-y-2">
+              <Button
+                size="lg"
+                variant="outline"
+                className="w-full"
+                onClick={() => runSync(true)}
+                disabled={syncing}
+              >
+                {syncing ? <><Loader2 className="h-4 w-4 animate-spin" /> Analizando...</> : <><RefreshCw className="h-4 w-4" /> Previsualizar importación</>}
+              </Button>
+              <p className="text-xs text-gray-400 text-center">
+                Previsualización: sin cambios en la base de datos
+              </p>
+            </div>
+          )}
+
+          {/* Dry-run preview */}
+          {phase === "preview" && result && (
+            <div className="space-y-3">
+              <div className="rounded-xl bg-blue-50 border border-blue-200 p-3 grid grid-cols-3 gap-2 text-center">
+                <div>
+                  <p className="text-lg font-bold text-blue-700">{result.clients?.toCreate ?? 0}</p>
+                  <p className="text-xs text-blue-500">Clientes nuevos</p>
+                </div>
+                <div>
+                  <p className="text-lg font-bold text-blue-700">{result.sessions?.toCreate ?? 0}</p>
+                  <p className="text-xs text-blue-500">Sesiones</p>
+                </div>
+                <div>
+                  <p className="text-lg font-bold text-blue-700">{result.packs?.toCreate ?? 0}</p>
+                  <p className="text-xs text-blue-500">Bonos</p>
+                </div>
+              </div>
+
+              {(result.diff?.length ?? 0) > 0 && (
+                <div className="rounded-xl border border-gray-200 overflow-hidden">
+                  <p className="text-xs font-semibold text-gray-500 px-3 py-2 bg-gray-50 uppercase tracking-wide">
+                    Cambios ({result.diff!.length})
+                  </p>
+                  <div className="max-h-40 overflow-y-auto divide-y divide-gray-100">
+                    {result.diff!.map((item, i) => (
+                      <div key={i} className="flex items-center gap-2 px-3 py-1.5 text-xs">
+                        <span className={`w-16 font-mono text-center rounded px-1 py-0.5 ${
+                          item.action === "CREATE" ? "bg-green-100 text-green-700" :
+                          item.action === "UPDATE" ? "bg-yellow-100 text-yellow-700" :
+                          "bg-gray-100 text-gray-500"
+                        }`}>{item.action}</span>
+                        <span className="text-gray-400 w-14">{item.entity}</span>
+                        <span className="text-gray-600 truncate">{item.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {(result.errors?.length ?? 0) > 0 && (
+                <div className="rounded-xl bg-red-50 border border-red-200 p-3">
+                  <p className="text-xs font-semibold text-red-700 mb-1">Advertencias ({result.errors!.length})</p>
+                  {result.errors!.slice(0, 3).map((e, i) => (
+                    <p key={i} className="text-xs text-red-600">{e}</p>
+                  ))}
+                  {result.errors!.length > 3 && <p className="text-xs text-red-400">+{result.errors!.length - 3} más</p>}
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" className="flex-1" onClick={() => { setSyncResult(null); setPhase("idle"); }}>
+                  Cancelar
+                </Button>
+                <Button
+                  size="sm"
+                  className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
+                  onClick={() => {
+                    if (!confirm(`¿Confirmar importación real para ${firstName}? Se crearán ${result.clients?.toCreate ?? 0} clientes, ${result.sessions?.toCreate ?? 0} sesiones y ${result.packs?.toCreate ?? 0} bonos.`)) return;
+                    setPhase("idle");
+                    runSync(false);
+                  }}
+                  disabled={syncing}
+                >
+                  {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Importar ahora"}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Completed */}
+          {phase === "confirm" && result && (
+            <div className="space-y-3">
+              <div className="rounded-xl bg-green-50 border border-green-200 p-3 text-center">
+                <p className="text-2xl font-bold text-green-700">{result.clients?.toCreate ?? 0}</p>
+                <p className="text-xs text-green-600">clientes importados</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-center">
+                <div className="rounded-xl bg-gray-50 border border-gray-200 p-2">
+                  <p className="text-lg font-bold text-gray-700">{result.sessions?.toCreate ?? 0}</p>
+                  <p className="text-xs text-gray-500">sesiones</p>
+                </div>
+                <div className="rounded-xl bg-gray-50 border border-gray-200 p-2">
+                  <p className="text-lg font-bold text-gray-700">{result.packs?.toCreate ?? 0}</p>
+                  <p className="text-xs text-gray-500">bonos</p>
+                </div>
+              </div>
+              <Button size="lg" className="w-full" onClick={onClose}>Cerrar</Button>
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>
