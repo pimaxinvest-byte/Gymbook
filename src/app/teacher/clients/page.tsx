@@ -6,7 +6,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Trash2, Loader2, User, CreditCard, ChevronDown, ChevronUp, Check } from "lucide-react";
+import { Plus, Trash2, Loader2, User, CreditCard, ChevronDown, ChevronUp, Check, CalendarPlus } from "lucide-react";
 import { toast } from "@/components/ui/toaster";
 import Image from "next/image";
 
@@ -41,6 +41,21 @@ interface CreditRecord {
   }[];
 }
 
+interface AvailableSlot {
+  id: string;
+  title: string;
+  start: string;
+  end: string;
+  extendedProps: {
+    teacherName: string;
+    activityName: string;
+    spaceName: string;
+    sessionType: string;
+    capacity: number;
+    occupancy: number;
+  };
+}
+
 export default function TeacherClientsPage() {
   const { data: session } = useSession();
   const role = session?.user?.role;
@@ -50,6 +65,7 @@ export default function TeacherClientsPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [credits, setCredits] = useState<Record<string, CreditRecord[]>>({});
+  const [bookForClient, setBookForClient] = useState<{ clientId: string; clientName: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -205,9 +221,19 @@ export default function TeacherClientsPage() {
                       </div>
                     </div>
 
-                    {/* Expanded: credit management + log */}
+                    {/* Expanded: credit management + log + book button */}
                     {isExpanded && (
                       <div className="mt-4 border-t border-gray-100 pt-4 space-y-4">
+
+                        {/* Book session for this client */}
+                        <button
+                          onClick={() => setBookForClient({ clientId: c.id, clientName: c.user.name })}
+                          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-orange-50 border-2 border-orange-200 text-orange-600 font-semibold text-sm hover:bg-orange-100 transition-colors cursor-pointer"
+                        >
+                          <CalendarPlus className="h-4 w-4" aria-hidden="true" />
+                          Reservar sesión para {c.user.name.split(" ")[0]}
+                        </button>
+
                         {/* Credit controls */}
                         {(["INDIVIDUAL", "SGT"] as const).map((type) => {
                           const cr = clientCredits.find((x) => x.creditType === type);
@@ -224,7 +250,7 @@ export default function TeacherClientsPage() {
                                   </span>
                                   {expiresAt && (
                                     <p className={`text-xs ${expired ? "text-red-500" : "text-gray-400"}`}>
-                                      {expired ? "Caducados" : `Caducan`}: {new Date(expiresAt).toLocaleDateString("es-ES")}
+                                      {expired ? "Caducados" : "Caducan"}: {new Date(expiresAt).toLocaleDateString("es-ES")}
                                     </p>
                                   )}
                                 </div>
@@ -288,7 +314,177 @@ export default function TeacherClientsPage() {
           isAdmin={role === "ADMIN"}
         />
       )}
+
+      {bookForClient && (
+        <BookForClientModal
+          clientId={bookForClient.clientId}
+          clientName={bookForClient.clientName}
+          onClose={() => setBookForClient(null)}
+          onBooked={() => {
+            setBookForClient(null);
+            // Refresh credits for the client
+            setCredits((prev) => {
+              const next = { ...prev };
+              delete next[bookForClient.clientId];
+              return next;
+            });
+            load();
+          }}
+        />
+      )}
     </AppShell>
+  );
+}
+
+// ── Book For Client Modal ─────────────────────────────────────────────────────
+
+function BookForClientModal({
+  clientId,
+  clientName,
+  onClose,
+  onBooked,
+}: {
+  clientId: string;
+  clientName: string;
+  onClose: () => void;
+  onBooked: () => void;
+}) {
+  const [slots, setSlots] = useState<AvailableSlot[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(true);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [booking, setBooking] = useState(false);
+
+  useEffect(() => {
+    async function fetchSlots() {
+      // Fetch available slots for the next 60 days
+      const start = new Date().toISOString();
+      const end = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString();
+      const res = await fetch(
+        `/api/bookings/calendar?status=AVAILABLE&start=${start}&end=${end}`
+      );
+      if (res.ok) {
+        const data: AvailableSlot[] = await res.json();
+        setSlots(data);
+      }
+      setLoadingSlots(false);
+    }
+    fetchSlots();
+  }, []);
+
+  async function handleBook() {
+    if (!selectedId) return;
+    setBooking(true);
+    const res = await fetch("/api/bookings/teacher-book", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bookingId: selectedId, clientId }),
+    });
+    if (res.ok) {
+      toast({ title: `Sesión reservada para ${clientName} ✓`, variant: "success" });
+      onBooked();
+    } else {
+      const d = await res.json();
+      toast({ title: d.error || "Error al reservar", variant: "error" });
+    }
+    setBooking(false);
+  }
+
+  const formatDateTime = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleString("es-ES", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const formatTime = (iso: string) =>
+    new Date(iso).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-sm mx-4 max-h-[90dvh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Reservar sesión para {clientName.split(" ")[0]}</DialogTitle>
+        </DialogHeader>
+
+        {loadingSlots ? (
+          <div className="flex justify-center py-12">
+            <Loader2 className="h-6 w-6 animate-spin text-orange-500" />
+          </div>
+        ) : slots.length === 0 ? (
+          <div className="text-center py-12 text-gray-400">
+            <CalendarPlus className="h-10 w-10 mx-auto mb-3 opacity-30" />
+            <p className="font-medium text-sm">Sin franjas disponibles</p>
+            <p className="text-xs mt-1">Abre disponibilidad desde tu planning</p>
+          </div>
+        ) : (
+          <>
+            <p className="text-xs text-gray-500 px-0.5 -mt-1">
+              {slots.length} franja{slots.length !== 1 ? "s" : ""} disponible{slots.length !== 1 ? "s" : ""}
+              {" "}· Se descontará 1 crédito
+            </p>
+            <div className="flex-1 overflow-y-auto space-y-2 mt-1 pr-0.5">
+              {slots.map((slot) => {
+                const isSGT = slot.extendedProps.sessionType === "SGT";
+                const isSelected = selectedId === slot.id;
+                return (
+                  <button
+                    key={slot.id}
+                    onClick={() => setSelectedId(isSelected ? null : slot.id)}
+                    className={`w-full text-left rounded-xl border-2 p-3 transition-colors cursor-pointer ${
+                      isSelected
+                        ? "border-orange-400 bg-orange-50"
+                        : "border-gray-100 bg-white hover:border-orange-200 hover:bg-orange-50/50"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm text-gray-900">
+                          {slot.extendedProps.activityName}
+                          {isSGT && (
+                            <span className="ml-1.5 text-[10px] font-bold bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-full">
+                              SGT {slot.extendedProps.occupancy}/{slot.extendedProps.capacity}
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {formatDateTime(slot.start)} — {formatTime(slot.end)}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-0.5">{slot.extendedProps.spaceName}</p>
+                      </div>
+                      {isSelected && (
+                        <span className="flex-shrink-0 w-5 h-5 rounded-full bg-orange-500 flex items-center justify-center">
+                          <Check className="h-3 w-3 text-white" />
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <Button
+              size="lg"
+              className="w-full mt-3"
+              onClick={handleBook}
+              disabled={!selectedId || booking}
+            >
+              {booking ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <>
+                  <CalendarPlus className="h-4 w-4" />
+                  Confirmar reserva
+                </>
+              )}
+            </Button>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 

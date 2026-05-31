@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { addDays, parseISO, isAfter } from "date-fns";
+import { checkBookingConflicts } from "@/lib/booking-conflicts";
 
 const schema = z.object({
   teacherId: z.string().optional(),
@@ -135,24 +136,20 @@ export async function POST(req: NextRequest) {
       current = addDays(current, 1);
     }
 
-    // Check conflicts (only for individual — SGT can overlap same slot)
+    // Check space + teacher conflicts for each slot
     const conflicts: string[] = [];
     const created: { start: Date; end: Date }[] = [];
 
     for (const slot of slots) {
-      if (data.sessionType === "INDIVIDUAL") {
-        const overlap = await prisma.booking.findFirst({
-          where: {
-            teacherId,
-            status: { notIn: ["CANCELLED"] },
-            startDatetime: { lt: slot.end },
-            endDatetime: { gt: slot.start },
-          },
-        });
-        if (overlap) {
-          conflicts.push(`${slot.start.toLocaleDateString("es-ES")} ${data.startTime}`);
-          continue;
-        }
+      const conflict = await checkBookingConflicts({
+        spaceId:       data.spaceId,
+        teacherId,
+        startDatetime: slot.start,
+        endDatetime:   slot.end,
+      });
+      if (conflict.hasConflict) {
+        conflicts.push(`${slot.start.toLocaleDateString("es-ES")} ${data.startTime} (${conflict.reason})`);
+        continue;
       }
       created.push(slot);
     }
