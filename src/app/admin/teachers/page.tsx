@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Edit2, Trash2, Loader2, X, MessageCircle } from "lucide-react";
+import { Plus, Edit2, Trash2, Loader2, X, MessageCircle, Copy, Check, Send } from "lucide-react";
 import { CardSkeleton } from "@/components/ui/skeleton";
 import { Avatar } from "@/components/ui/avatar";
 import { toast } from "@/components/ui/toaster";
@@ -26,6 +26,8 @@ export default function TeachersPage() {
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [editTeacher, setEditTeacher] = useState<Teacher | null>(null);
+  const [inviteLink, setInviteLink] = useState<{ name: string; url: string } | null>(null);
+  const [broadcasting, setBroadcasting] = useState(false);
 
   async function load() {
     const [tr, ar] = await Promise.all([
@@ -46,7 +48,7 @@ export default function TeachersPage() {
     load();
   }
 
-  async function sendTelegramLink(userId: string) {
+  async function generateInviteLink(userId: string, userName: string) {
     const r = await fetch("/api/telegram/connect", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -54,11 +56,30 @@ export default function TeachersPage() {
     });
     if (r.ok) {
       const { url } = await r.json();
-      window.open(url, "_blank");
-      toast({ title: "Enlace de Telegram abierto", variant: "success" });
+      setInviteLink({ name: userName, url });
     } else {
       toast({ title: "Error: configura el bot de Telegram primero", variant: "error" });
     }
+  }
+
+  async function broadcastPDF() {
+    setBroadcasting(true);
+    const r = await fetch("/api/admin/telegram/broadcast", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "pdf" }),
+    });
+    const d = await r.json();
+    if (r.ok) {
+      const parts = [];
+      if (d.sent?.length)    parts.push(`✓ Enviado a: ${d.sent.join(", ")}`);
+      if (d.pending?.length) parts.push(`⏳ Sin Telegram: ${d.pending.join(", ")}`);
+      if (d.errors?.length)  parts.push(`✗ Error: ${d.errors.join(", ")}`);
+      toast({ title: parts.join(" | ") || "Sin cambios", variant: d.sent?.length ? "success" : "error" });
+    } else {
+      toast({ title: d.error || "Error", variant: "error" });
+    }
+    setBroadcasting(false);
   }
 
   async function removeActivity(teacherId: string, activityId: string) {
@@ -82,9 +103,15 @@ export default function TeachersPage() {
       <div className="p-4 max-w-2xl mx-auto">
         <div className="flex justify-between items-center mb-4">
           <p className="text-sm text-gray-500">{teachers.length} profesores</p>
-          <Button size="sm" onClick={() => setShowCreate(true)}>
-            <Plus className="h-4 w-4" /> Añadir
-          </Button>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={broadcastPDF} disabled={broadcasting}>
+              {broadcasting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              Enviar PDF
+            </Button>
+            <Button size="sm" onClick={() => setShowCreate(true)}>
+              <Plus className="h-4 w-4" /> Añadir
+            </Button>
+          </div>
         </div>
 
         {loading ? (
@@ -122,10 +149,14 @@ export default function TeachersPage() {
                     </div>
                     <div className="flex gap-1.5 flex-shrink-0">
                       <button
-                        onClick={() => sendTelegramLink(t.user.id)}
-                        aria-label="Conectar Telegram"
-                        title="Generar enlace Telegram"
-                        className="w-9 h-9 flex items-center justify-center rounded-xl bg-blue-50 text-blue-500 hover:bg-blue-100 transition-colors cursor-pointer"
+                        onClick={() => generateInviteLink(t.user.id, t.user.name)}
+                        aria-label="Generar enlace Telegram"
+                        title={t.user.telegramConnected ? "Reconectar Telegram" : "Generar enlace de conexión Telegram"}
+                        className={`w-9 h-9 flex items-center justify-center rounded-xl transition-colors cursor-pointer ${
+                          t.user.telegramConnected
+                            ? "bg-blue-100 text-blue-600 hover:bg-blue-200"
+                            : "bg-blue-50 text-blue-400 hover:bg-blue-100"
+                        }`}
                       >
                         <MessageCircle className="h-4 w-4" />
                       </button>
@@ -197,10 +228,55 @@ export default function TeachersPage() {
 
       {showCreate && <TeacherFormModal onClose={() => setShowCreate(false)} onSaved={() => { setShowCreate(false); load(); }} />}
       {editTeacher && <TeacherFormModal teacher={editTeacher} onClose={() => setEditTeacher(null)} onSaved={() => { setEditTeacher(null); load(); }} />}
+      {inviteLink && <InviteLinkModal name={inviteLink.name} url={inviteLink.url} onClose={() => setInviteLink(null)} />}
     </AppShell>
   );
 }
 
+// ── Invite Link Modal ─────────────────────────────────────────────────────────
+function InviteLinkModal({ name, url, onClose }: { name: string; url: string; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+
+  function copyLink() {
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    });
+  }
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-sm mx-4">
+        <DialogHeader>
+          <DialogTitle>Enlace de Telegram para {name.split(" ")[0]}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="rounded-xl bg-blue-50 border border-blue-100 p-4">
+            <p className="text-xs text-blue-700 font-medium mb-2">
+              Comparte este enlace con {name.split(" ")[0]}. Al abrirlo y pulsar /start en el bot, su Telegram quedará vinculado automáticamente.
+            </p>
+            <p className="text-xs font-mono break-all text-blue-900 bg-white/70 rounded-lg p-2 select-all">{url}</p>
+          </div>
+
+          <div className="flex gap-2">
+            <Button size="lg" className="flex-1" onClick={copyLink}>
+              {copied ? <><Check className="h-4 w-4" /> Copiado</> : <><Copy className="h-4 w-4" /> Copiar enlace</>}
+            </Button>
+            <Button size="lg" variant="outline" onClick={() => window.open(url, "_blank")}>
+              <MessageCircle className="h-4 w-4" />
+            </Button>
+          </div>
+
+          <p className="text-xs text-gray-400 text-center">
+            El enlace expira en 24 h. Genera uno nuevo si es necesario.
+          </p>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Teacher Form Modal ────────────────────────────────────────────────────────
 function TeacherFormModal({ teacher, onClose, onSaved }: { teacher?: Teacher; onClose: () => void; onSaved: () => void }) {
   const isEdit = !!teacher;
   const [form, setForm] = useState({

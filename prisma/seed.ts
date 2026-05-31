@@ -185,17 +185,22 @@ async function main() {
   });
   console.log("✓ AppSettings configuradas");
 
-  // Telegram settings — real bot config
+  // Telegram settings — token read from env (never hardcoded here)
+  const tgToken  = process.env.TELEGRAM_BOT_TOKEN  || "";
+  const tgName   = process.env.TELEGRAM_BOT_NAME   || "Daddysgymbook_bot";
+  const adminCid = process.env.TELEGRAM_ADMIN_CHAT_ID || "";
   await prisma.telegramSettings.upsert({
     where:  { id: "default" },
     update: {
-      botToken:  "8720707969:AAF6O657jjMlU27UL34fXRPb_rgWn2NCyV8",
-      botName:   "Daddysgymbook_bot",
+      ...(tgToken  && { botToken:    tgToken  }),
+      ...(tgName   && { botName:     tgName   }),
+      ...(adminCid && { adminChatId: adminCid }),
     },
     create: {
       id:            "default",
-      botToken:      "8720707969:AAF6O657jjMlU27UL34fXRPb_rgWn2NCyV8",
-      botName:       "Daddysgymbook_bot",
+      botToken:      tgToken,
+      botName:       tgName,
+      adminChatId:   adminCid,
       notifyAdmin:   true,
       notifyTeacher: true,
       notifyClient:  true,
