@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import type { Role } from "@prisma/client";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  trustHost: true,
   providers: [
     CredentialsProvider({
       name: "credentials",
@@ -46,9 +47,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return token;
     },
     async session({ session, token }) {
-      if (token) {
+      if (token && session.user) {
         session.user.id = token.id as string;
-        session.user.role = token.role as Role;
+        session.user.role = (token.role as Role) ?? "CLIENT";
       }
       return session;
     },
