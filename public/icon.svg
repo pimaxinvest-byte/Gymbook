@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fb923c"/>
+      <stop offset="100%" stop-color="#ea580c"/>
+    </linearGradient>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#00000033"/>
+    </filter>
+  </defs>
+
+  <!-- Background rounded rect -->
+  <rect width="512" height="512" rx="112" ry="112" fill="url(#bg)"/>
+
+  <!-- Dumbbell icon (centered, white) -->
+  <!-- Left weight plate group -->
+  <rect x="54" y="198" width="36" height="116" rx="12" fill="white" opacity="0.95"/>
+  <rect x="78" y="178" width="28" height="156" rx="10" fill="white" opacity="0.95"/>
+
+  <!-- Bar -->
+  <rect x="106" y="232" width="300" height="48" rx="12" fill="white" opacity="0.95"/>
+
+  <!-- Right weight plate group -->
+  <rect x="406" y="178" width="28" height="156" rx="10" fill="white" opacity="0.95"/>
+  <rect x="422" y="198" width="36" height="116" rx="12" fill="white" opacity="0.95"/>
+
+  <!-- Center knurl detail -->
+  <rect x="226" y="238" width="60" height="36" rx="6" fill="white" opacity="0.25"/>
+</svg>

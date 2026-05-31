@@ -15,17 +15,26 @@ export const metadata: Metadata = {
     capable: true,
     statusBarStyle: "black-translucent",
     title: "GymBook",
-    startupImage: "/logo.svg",
   },
   icons: {
-    icon: "/logo.svg",
-    apple: "/logo.svg",
+    icon: [
+      { url: "/favicon-16.png", sizes: "16x16", type: "image/png" },
+      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+    other: [
+      { rel: "mask-icon", url: "/icon.svg", color: "#f97316" },
+    ],
   },
   openGraph: {
     title: "GymBook",
     description: "Sistema de reservas para gimnasios",
     type: "website",
-    images: ["/logo.svg"],
+    images: ["/icons/icon-512.png"],
   },
 };
 
@@ -34,7 +43,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#000000",
+  themeColor: "#f97316",
   viewportFit: "cover",
 };
 
