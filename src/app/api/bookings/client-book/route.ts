@@ -63,6 +63,25 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Client double-booking check
+  const clientConflict = await prisma.booking.findFirst({
+    where: {
+      status: { in: ["BOOKED"] },
+      startDatetime: { lt: booking.endDatetime },
+      endDatetime:   { gt: booking.startDatetime },
+      OR: [
+        { clientId: client.id },
+        { participants: { some: { clientId: client.id } } },
+      ],
+    },
+  });
+  if (clientConflict) {
+    return NextResponse.json(
+      { error: "Ya tienes una sesión a esa hora" },
+      { status: 409 }
+    );
+  }
+
   // Credit check
   const now = new Date();
   const creditRecord = await prisma.clientCredits.findUnique({

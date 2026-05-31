@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { notifyBookingCreated } from "@/lib/telegram";
 import { CreditType } from "@prisma/client";
+import { checkBookingConflicts } from "@/lib/booking-conflicts";
 
 const schema = z.object({
   bookingId: z.string(),
@@ -73,6 +74,37 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { error: "El cliente no está asignado a este entrenador" },
       { status: 403 }
+    );
+  }
+
+  // Space + teacher conflict check (safety net — excludes the slot itself)
+  const conflictCheck = await checkBookingConflicts({
+    spaceId:       booking.spaceId,
+    teacherId:     booking.teacherId,
+    startDatetime: booking.startDatetime,
+    endDatetime:   booking.endDatetime,
+    excludeBookingId: booking.id,
+  });
+  if (conflictCheck.hasConflict) {
+    return NextResponse.json({ error: conflictCheck.reason }, { status: 409 });
+  }
+
+  // Client double-booking check: ensure client has no overlapping confirmed session
+  const clientConflict = await prisma.booking.findFirst({
+    where: {
+      status: { in: ["BOOKED"] },
+      startDatetime: { lt: booking.endDatetime },
+      endDatetime:   { gt: booking.startDatetime },
+      OR: [
+        { clientId: client.id },
+        { participants: { some: { clientId: client.id } } },
+      ],
+    },
+  });
+  if (clientConflict) {
+    return NextResponse.json(
+      { error: "El cliente ya tiene una sesión a esa hora" },
+      { status: 409 }
     );
   }
 
