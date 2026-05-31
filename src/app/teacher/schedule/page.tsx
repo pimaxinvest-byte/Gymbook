@@ -358,27 +358,35 @@ function AddAvailabilityModal({
             {/* Activity */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Actividad *</label>
-              <select
-                value={activityId}
-                onChange={(e) => setActivityId(e.target.value)}
-                className="w-full h-12 rounded-xl border-2 border-gray-200 px-3 text-sm bg-white focus:outline-none focus:border-orange-400 cursor-pointer"
-              >
-                <option value="">Selecciona...</option>
-                {activities.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-              </select>
+              {activities.length === 0 ? (
+                <p className="text-sm text-red-500 bg-red-50 rounded-xl px-3 py-3">No hay actividades configuradas. Contacta al administrador.</p>
+              ) : (
+                <select
+                  value={activityId}
+                  onChange={(e) => setActivityId(e.target.value)}
+                  className="w-full h-12 rounded-xl border-2 border-gray-200 px-3 text-sm bg-white focus:outline-none focus:border-orange-400 cursor-pointer"
+                >
+                  <option value="">— Selecciona actividad —</option>
+                  {activities.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+              )}
             </div>
 
             {/* Space */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Espacio *</label>
-              <select
-                value={spaceId}
-                onChange={(e) => setSpaceId(e.target.value)}
-                className="w-full h-12 rounded-xl border-2 border-gray-200 px-3 text-sm bg-white focus:outline-none focus:border-orange-400 cursor-pointer"
-              >
-                <option value="">Selecciona...</option>
-                {spaces.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Sala / Espacio *</label>
+              {spaces.length === 0 ? (
+                <p className="text-sm text-red-500 bg-red-50 rounded-xl px-3 py-3">No hay espacios configurados. Contacta al administrador.</p>
+              ) : (
+                <select
+                  value={spaceId}
+                  onChange={(e) => setSpaceId(e.target.value)}
+                  className="w-full h-12 rounded-xl border-2 border-gray-200 px-3 text-sm bg-white focus:outline-none focus:border-orange-400 cursor-pointer"
+                >
+                  <option value="">— Selecciona sala —</option>
+                  {spaces.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              )}
             </div>
 
             <Button size="lg" className="w-full" onClick={handleSave} disabled={saving || !rangeValid}>
