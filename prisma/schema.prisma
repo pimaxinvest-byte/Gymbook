@@ -35,6 +35,7 @@ model User {
   teacher       Teacher?
   client        Client?
   createdBookings Booking[] @relation("CreatedBy")
+  creditTransactions CreditTransaction[] @relation("CreditCreatedBy")
 }
 
 model Teacher {
@@ -49,6 +50,7 @@ model Teacher {
 
   bookings    Booking[]
   availabilitySlots AvailabilitySlot[]
+  clientCredits ClientCredits[]
 }
 
 model Client {
@@ -60,6 +62,42 @@ model Client {
   updatedAt   DateTime  @updatedAt
 
   bookings    Booking[]
+  credits     ClientCredits[]
+}
+
+// Credits balance per (client, teacher) pair
+model ClientCredits {
+  id          String    @id @default(cuid())
+  clientId    String
+  client      Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  teacherId   String
+  teacher     Teacher   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  balance     Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  transactions CreditTransaction[]
+
+  @@unique([clientId, teacherId])
+}
+
+enum CreditTransactionType {
+  ASSIGNED   // teacher/admin adds credits
+  DEDUCTED   // booking confirmed, credit spent
+  REFUNDED   // booking cancelled, credit returned
+}
+
+model CreditTransaction {
+  id              String                @id @default(cuid())
+  clientCreditsId String
+  clientCredits   ClientCredits         @relation(fields: [clientCreditsId], references: [id], onDelete: Cascade)
+  amount          Int                   // positive = add, negative = deduct
+  type            CreditTransactionType
+  bookingId       String?               // linked booking (nullable for manual assignments)
+  note            String?
+  createdById     String
+  createdBy       User                  @relation("CreditCreatedBy", fields: [createdById], references: [id])
+  createdAt       DateTime              @default(now())
 }
 
 model Space {

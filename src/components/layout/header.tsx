@@ -18,16 +18,14 @@ export function Header({ title, gymName = "GymBook", logoUrl }: HeaderProps) {
     <header className="sticky top-0 z-30 bg-white border-b border-gray-100 shadow-sm">
       <div className="flex items-center justify-between h-14 px-4">
         <div className="flex items-center gap-2.5">
-          {logoUrl ? (
-            <Image src={logoUrl} alt={`Logo de ${gymName}`} width={28} height={28} className="rounded-lg object-contain" />
-          ) : (
-            <div
-              className="w-8 h-8 rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center shadow-sm"
-              aria-hidden="true"
-            >
-              <span className="text-white text-xs font-black">G</span>
-            </div>
-          )}
+          <Image
+            src={logoUrl || "/logo.svg"}
+            alt={`Logo de ${gymName}`}
+            width={36}
+            height={36}
+            className="rounded-xl object-contain"
+            priority
+          />
           <div>
             <p className="text-xs text-gray-500 leading-none">{gymName}</p>
             {title && <h1 className="text-sm font-bold text-gray-900 leading-tight">{title}</h1>}

@@ -1,0 +1,12 @@
+{
+  "name": "GymBook",
+  "short_name": "GymBook",
+  "description": "Sistema de reservas para gimnasios",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#f97316",
+  "icons": [
+    { "src": "/logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

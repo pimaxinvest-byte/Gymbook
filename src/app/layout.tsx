@@ -7,15 +7,35 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "GymBook — Gestión de Reservas",
-  description: "Sistema de reservas para gimnasios",
-  appleWebApp: { capable: true, statusBarStyle: "default", title: "GymBook" },
+  description: "Sistema de reservas para gimnasios. Creado por Pietro.",
+  manifest: "/manifest.json",
+  authors: [{ name: "Pietro" }],
+  creator: "Pietro",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "GymBook",
+    startupImage: "/logo.svg",
+  },
+  icons: {
+    icon: "/logo.svg",
+    apple: "/logo.svg",
+  },
+  openGraph: {
+    title: "GymBook",
+    description: "Sistema de reservas para gimnasios",
+    type: "website",
+    images: ["/logo.svg"],
+  },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
-  themeColor: "#6366f1",
+  userScalable: false,
+  themeColor: "#000000",
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -24,7 +44,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={`${inter.className} bg-gray-50 text-gray-900 antialiased`}>
         <a href="#main-content" className="skip-link">Saltar al contenido</a>
         <Providers>
-          <main id="main-content">{children}</main>
+          <div id="main-content">{children}</div>
         </Providers>
       </body>
     </html>

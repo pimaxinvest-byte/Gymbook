@@ -38,9 +38,48 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Esta franja no está disponible" }, { status: 409 });
   }
 
-  const updated = await prisma.booking.update({
-    where: { id: bookingId },
-    data: { clientId: client.id, status: "BOOKED" },
+  // --- Credit check ---
+  const creditRecord = await prisma.clientCredits.findUnique({
+    where: {
+      clientId_teacherId: {
+        clientId: client.id,
+        teacherId: booking.teacherId,
+      },
+    },
+  });
+
+  const balance = creditRecord?.balance ?? 0;
+  if (balance < 1) {
+    return NextResponse.json(
+      { error: "No tienes créditos suficientes con este entrenador" },
+      { status: 402 }
+    );
+  }
+
+  // --- Atomic: book + deduct credit ---
+  const updated = await prisma.$transaction(async (tx) => {
+    const bookedEntry = await tx.booking.update({
+      where: { id: bookingId },
+      data: { clientId: client.id, status: "BOOKED" },
+    });
+
+    await tx.clientCredits.update({
+      where: { id: creditRecord!.id },
+      data: { balance: { decrement: 1 } },
+    });
+
+    await tx.creditTransaction.create({
+      data: {
+        clientCreditsId: creditRecord!.id,
+        amount: -1,
+        type: "DEDUCTED",
+        bookingId: bookingId,
+        note: `Reserva ${booking.activity.name} con ${booking.teacher.user.name}`,
+        createdById: session.user.id,
+      },
+    });
+
+    return bookedEntry;
   });
 
   notifyBookingCreated(

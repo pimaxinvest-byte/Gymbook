@@ -52,10 +52,49 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
   }
 
-  const updated = await prisma.booking.update({
-    where: { id },
-    data: body,
-  });
+  // --- Credit refund on cancellation ---
+  let updated;
+  const isCancelling = body.status === "CANCELLED" && booking.status === "BOOKED";
+
+  if (isCancelling && booking.clientId) {
+    // Find the credit record for this (client, teacher) pair
+    const creditRecord = await prisma.clientCredits.findUnique({
+      where: {
+        clientId_teacherId: {
+          clientId: booking.clientId,
+          teacherId: booking.teacherId,
+        },
+      },
+    });
+
+    if (creditRecord) {
+      updated = await prisma.$transaction(async (tx) => {
+        const result = await tx.booking.update({ where: { id }, data: body });
+
+        await tx.clientCredits.update({
+          where: { id: creditRecord.id },
+          data: { balance: { increment: 1 } },
+        });
+
+        await tx.creditTransaction.create({
+          data: {
+            clientCreditsId: creditRecord.id,
+            amount: 1,
+            type: "REFUNDED",
+            bookingId: id,
+            note: `Cancelación de ${booking.activity.name}`,
+            createdById: session.user.id,
+          },
+        });
+
+        return result;
+      });
+    } else {
+      updated = await prisma.booking.update({ where: { id }, data: body });
+    }
+  } else {
+    updated = await prisma.booking.update({ where: { id }, data: body });
+  }
 
   const notifData = {
     bookingId: id,

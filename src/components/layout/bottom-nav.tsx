@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Calendar, PlusCircle, Users, BookOpen, Settings, LayoutDashboard } from "lucide-react";
+import { Calendar, PlusCircle, Users, BookOpen, Settings, LayoutDashboard, CreditCard } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSession } from "next-auth/react";
 import type { Role } from "@prisma/client";
@@ -21,6 +21,7 @@ const navItems: NavItem[] = [
   { href: "/teacher/schedule",label: "Mi horario",  icon: BookOpen,       roles: ["TEACHER"] },
   { href: "/admin/dashboard", label: "Dashboard",   icon: LayoutDashboard,roles: ["ADMIN"] },
   { href: "/admin/teachers",  label: "Equipo",      icon: Users,          roles: ["ADMIN"] },
+  { href: "/credits",         label: "Créditos",    icon: CreditCard,     roles: ["ADMIN", "TEACHER", "CLIENT"] },
   { href: "/settings",        label: "Ajustes",     icon: Settings,       roles: ["ADMIN", "TEACHER", "CLIENT"] },
 ];
 

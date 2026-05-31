@@ -8,7 +8,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dumbbell, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import Image from "next/image";
 
 const schema = z.object({
   email: z.string().email("Email inválido"),
@@ -44,14 +45,14 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-indigo-50 to-purple-50 p-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-orange-50 to-amber-50 p-4">
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-200 mb-4">
-            <Dumbbell className="h-10 w-10 text-white" />
+          <div className="mb-4 drop-shadow-2xl">
+            <Image src="/logo.svg" alt="GymBook Logo" width={96} height={96} priority />
           </div>
-          <h1 className="text-2xl font-black text-gray-900">GymBook</h1>
+          <h1 className="text-3xl font-black text-gray-900 tracking-tight">GymBook</h1>
           <p className="text-sm text-gray-500 mt-1">Gestión de reservas</p>
         </div>
 
@@ -91,9 +92,14 @@ export default function LoginPage() {
 
           <p className="text-center text-sm text-gray-500 mt-4">
             ¿No tienes cuenta?{" "}
-            <a href="/register" className="text-indigo-600 font-semibold">Regístrate</a>
+            <a href="/register" className="text-orange-600 font-semibold">Regístrate</a>
           </p>
         </div>
+
+        {/* Footer credits */}
+        <p className="text-center text-xs text-gray-400 mt-6">
+          GymBook v1.0.0 · Creado por Pietro
+        </p>
       </div>
     </div>
   );
