@@ -110,6 +110,7 @@ model Teacher {
   clientTeachers    ClientTeacher[]
   teacherActivities TeacherActivity[]
   preferringClients Client[]           @relation("ClientPreferredTeacher")
+  harbizConnection  TeacherHarbizConnection?
 }
 
 // Many-to-many: Teacher <-> Activity
@@ -405,3 +406,56 @@ model NotificationLog {
 
 // Relation helpers needed for Client preferred teacher
 // (stored as direct fields above, no extra model needed)
+
+// ─── Harbiz Integration ──────────────────────────────────────────────────────
+
+model TeacherHarbizConnection {
+  id           String    @id @default(cuid())
+  teacherId    String    @unique
+  teacher      Teacher   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  harbizProfId String?                   // Meteor userId del profesional en Harbiz
+  lastSyncAt   DateTime?
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  syncLogs     ExternalSyncLog[]
+
+  @@index([teacherId])
+}
+
+model ExternalIdMapping {
+  id          String   @id @default(cuid())
+  entityType  String   // "CLIENT" | "BOOKING" | "CREDIT"
+  gymBookId   String
+  externalId  String   // Meteor _id en Harbiz
+  source      String   @default("HARBIZ")
+  createdAt   DateTime @default(now())
+
+  @@unique([entityType, externalId, source])
+  @@unique([entityType, gymBookId, source])
+  @@index([entityType, gymBookId])
+  @@index([entityType, externalId])
+}
+
+model ExternalSyncLog {
+  id              String                   @id @default(cuid())
+  connectionId    String
+  connection      TeacherHarbizConnection  @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  syncType        String                   @default("FULL")
+  status          String                   @default("PENDING") // PENDING | DRY_RUN_OK | COMPLETED | FAILED
+  dryRun          Boolean                  @default(true)
+  clientsFound    Int                      @default(0)
+  clientsCreated  Int                      @default(0)
+  clientsUpdated  Int                      @default(0)
+  sessionsFound   Int                      @default(0)
+  sessionsCreated Int                      @default(0)
+  packsFound      Int                      @default(0)
+  packsCreated    Int                      @default(0)
+  errors          Json?
+  diffJson        Json?
+  startedAt       DateTime                 @default(now())
+  completedAt     DateTime?
+
+  @@index([connectionId])
+  @@index([startedAt])
+}

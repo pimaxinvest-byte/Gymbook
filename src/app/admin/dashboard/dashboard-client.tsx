@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Calendar, TrendingUp, Users, Activity, BarChart2, MessageCircle, UserPlus } from "lucide-react";
+import { Calendar, TrendingUp, Users, Activity, BarChart2, MessageCircle, UserPlus, RefreshCw } from "lucide-react";
 import { GymCalendar } from "@/components/calendar/gym-calendar";
 import Link from "next/link";
 
@@ -44,6 +44,7 @@ export function AdminDashboardClient() {
             { href: "/settings", label: "Configuración", icon: SettingsIcon },
             { href: "/admin/telegram", label: "Telegram", icon: MessageCircle },
             { href: "/admin/invite", label: "Invitar", icon: UserPlus },
+            { href: "/admin/harbiz", label: "Harbiz Sync", icon: RefreshCw },
           ].map((item) => (
             <Link
               key={item.href}
