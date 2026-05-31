@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Edit2, Trash2, Loader2, X, MessageCircle, Copy, Check, Send } from "lucide-react";
+import { Plus, Edit2, Trash2, Loader2, X, MessageCircle, Copy, Check, Send, UserPlus, Mail, ExternalLink } from "lucide-react";
 import { CardSkeleton } from "@/components/ui/skeleton";
 import { Avatar } from "@/components/ui/avatar";
 import { toast } from "@/components/ui/toaster";
@@ -28,6 +28,7 @@ export default function TeachersPage() {
   const [editTeacher, setEditTeacher] = useState<Teacher | null>(null);
   const [inviteLink, setInviteLink] = useState<{ name: string; url: string } | null>(null);
   const [broadcasting, setBroadcasting] = useState(false);
+  const [showClientInvite, setShowClientInvite] = useState(false);
 
   async function load() {
     const [tr, ar] = await Promise.all([
@@ -103,7 +104,10 @@ export default function TeachersPage() {
       <div className="p-4 max-w-2xl mx-auto">
         <div className="flex justify-between items-center mb-4">
           <p className="text-sm text-gray-500">{teachers.length} profesores</p>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <Button size="sm" variant="outline" onClick={() => setShowClientInvite(true)}>
+              <UserPlus className="h-4 w-4" /> Invitar clientes
+            </Button>
             <Button size="sm" variant="outline" onClick={broadcastPDF} disabled={broadcasting}>
               {broadcasting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               Enviar PDF
@@ -229,6 +233,7 @@ export default function TeachersPage() {
       {showCreate && <TeacherFormModal onClose={() => setShowCreate(false)} onSaved={() => { setShowCreate(false); load(); }} />}
       {editTeacher && <TeacherFormModal teacher={editTeacher} onClose={() => setEditTeacher(null)} onSaved={() => { setEditTeacher(null); load(); }} />}
       {inviteLink && <InviteLinkModal name={inviteLink.name} url={inviteLink.url} onClose={() => setInviteLink(null)} />}
+      {showClientInvite && <ClientInviteModal onClose={() => setShowClientInvite(false)} />}
     </AppShell>
   );
 }
@@ -270,6 +275,95 @@ function InviteLinkModal({ name, url, onClose }: { name: string; url: string; on
           <p className="text-xs text-gray-400 text-center">
             El enlace expira en 24 h. Genera uno nuevo si es necesario.
           </p>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Client Invite Modal ───────────────────────────────────────────────────────
+const REGISTER_URL = "https://gymbook-app-production.up.railway.app/register";
+const DEFAULT_INVITE_MSG = `¡Hola! Te invitamos a unirte a GymBook, la app de reservas de nuestro gimnasio.\n\nReserva sesiones con tu entrenador personal, gestiona tus créditos y horarios, y recibe notificaciones en Telegram.\n\nRegístrate aquí: ${REGISTER_URL}\n\n¡Te esperamos!`;
+
+function ClientInviteModal({ onClose }: { onClose: () => void }) {
+  const [message, setMessage] = useState(DEFAULT_INVITE_MSG);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedMsg, setCopiedMsg] = useState(false);
+
+  function copyLink() {
+    navigator.clipboard.writeText(REGISTER_URL).then(() => {
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2500);
+    });
+  }
+
+  function copyMessage() {
+    navigator.clipboard.writeText(message).then(() => {
+      setCopiedMsg(true);
+      setTimeout(() => setCopiedMsg(false), 2500);
+    });
+  }
+
+  const encodedMessage = encodeURIComponent(message);
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-sm mx-4">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <UserPlus className="h-5 w-5 text-orange-500" />
+            Invitar nuevos clientes
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          {/* Link */}
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Enlace de registro</p>
+            <div className="flex items-center gap-2">
+              <p className="flex-1 font-mono text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-gray-700 break-all">
+                {REGISTER_URL}
+              </p>
+              <button
+                onClick={copyLink}
+                aria-label="Copiar enlace"
+                className="flex-shrink-0 w-9 h-9 rounded-xl bg-orange-50 text-orange-600 hover:bg-orange-100 flex items-center justify-center transition-colors"
+              >
+                {copiedLink ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+          {/* Message */}
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Mensaje</p>
+            <textarea
+              rows={5}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              className="w-full rounded-xl border-2 border-gray-200 px-3 py-2 text-xs focus:outline-none focus:border-orange-400 resize-none text-gray-700 leading-relaxed"
+            />
+          </div>
+          {/* Share buttons */}
+          <div className="grid grid-cols-2 gap-2">
+            <a
+              href={`mailto:?subject=${encodeURIComponent("Invitación GymBook")}&body=${encodedMessage}`}
+              className="flex items-center justify-center gap-1.5 h-10 rounded-xl border-2 border-gray-200 bg-white text-xs font-semibold text-gray-700 hover:border-orange-400 hover:text-orange-600 transition-colors"
+            >
+              <Mail className="h-4 w-4" />
+              Email
+            </a>
+            <a
+              href={`https://wa.me/?text=${encodedMessage}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-1.5 h-10 rounded-xl border-2 border-green-200 bg-green-50 text-xs font-semibold text-green-700 hover:bg-green-100 transition-colors"
+            >
+              <ExternalLink className="h-4 w-4" />
+              WhatsApp
+            </a>
+            <Button size="sm" variant="outline" onClick={copyMessage} className="col-span-2">
+              {copiedMsg ? <><Check className="h-4 w-4" /> Copiado</> : <><Copy className="h-4 w-4" /> Copiar texto</>}
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

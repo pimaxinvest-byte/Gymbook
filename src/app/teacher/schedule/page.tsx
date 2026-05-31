@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 import { GymCalendar } from "@/components/calendar/gym-calendar";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { CalendarPlus, Clock, Loader2, Plus } from "lucide-react";
+import { CalendarPlus, Clock, Download, Loader2, Plus } from "lucide-react";
 import { toast } from "@/components/ui/toaster";
 
 interface Activity { id: string; name: string }
@@ -27,6 +27,55 @@ export default function TeacherSchedulePage() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [spaces,     setSpaces]     = useState<Space[]>([]);
   const [loadingMeta, setLoadingMeta] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  async function handleExportICS() {
+    setExporting(true);
+    try {
+      // Fetch own teacher record via profile
+      const [teachersRes, profileRes] = await Promise.all([
+        fetch("/api/teachers"),
+        fetch("/api/profile"),
+      ]);
+      const teachers = await teachersRes.json() as { id: string; user: { id: string } }[];
+      const profile = await profileRes.json() as { id: string };
+      const own = teachers.find((t) => t.user?.id === profile.id);
+      if (!own) { toast({ title: "No se encontró tu perfil de profesor", variant: "error" }); setExporting(false); return; }
+      await downloadICS(own.id);
+    } catch {
+      toast({ title: "Error al exportar", variant: "error" });
+    }
+    setExporting(false);
+  }
+
+  async function downloadICS(teacherId: string) {
+    const now = new Date();
+    const start = new Date(now);
+    start.setDate(now.getDate() - now.getDay() + 1); // Monday
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6); // Sunday
+    end.setHours(23, 59, 59, 999);
+
+    const url = `/api/bookings/export-ics?teacherId=${teacherId}&start=${start.toISOString()}&end=${end.toISOString()}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      toast({ title: (d as { error?: string }).error || "Error al exportar", variant: "error" });
+      return;
+    }
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const dateStr = start.toISOString().slice(0, 10);
+    a.href = blobUrl;
+    a.download = `gymbook-semana-${dateStr}.ics`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(blobUrl);
+    toast({ title: "Agenda exportada", description: "Abre el archivo .ics con Google Calendar, Apple Calendar u Outlook", variant: "success" });
+  }
 
   // Lazy-load activities + spaces when modal opens
   useEffect(() => {
@@ -61,10 +110,16 @@ export default function TeacherSchedulePage() {
               SGT
             </span>
           </div>
-          <Button size="sm" onClick={() => setShowAvail(true)}>
-            <Plus className="h-4 w-4" />
-            Nueva disponibilidad
-          </Button>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={handleExportICS} disabled={exporting}>
+              {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              Exportar semana
+            </Button>
+            <Button size="sm" onClick={() => setShowAvail(true)}>
+              <Plus className="h-4 w-4" />
+              Nueva disponibilidad
+            </Button>
+          </div>
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden p-3">
