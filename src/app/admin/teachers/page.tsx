@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Plus, Edit2, Trash2, Loader2, User } from "lucide-react";
+import { CardSkeleton } from "@/components/ui/skeleton";
 import { toast } from "@/components/ui/toaster";
 
 interface Teacher { id: string; color: string; bio?: string; user: { id: string; name: string; email: string; telegramChatId?: string } }
@@ -43,7 +44,9 @@ export default function TeachersPage() {
         </div>
 
         {loading ? (
-          <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-indigo-400" /></div>
+          <div className="space-y-3" aria-label="Cargando profesores..." aria-busy="true">
+            {[1, 2, 3].map((i) => <CardSkeleton key={i} />)}
+          </div>
         ) : (
           <div className="space-y-3">
             {teachers.map((t) => (
@@ -60,11 +63,19 @@ export default function TeachersPage() {
                     )}
                   </div>
                   <div className="flex gap-2 flex-shrink-0">
-                    <button onClick={() => setEditTeacher(t)} className="p-2 rounded-xl hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors">
-                      <Edit2 className="h-4 w-4" />
+                    <button
+                      onClick={() => setEditTeacher(t)}
+                      aria-label={`Editar ${t.user.name}`}
+                      className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+                    >
+                      <Edit2 className="h-4 w-4" aria-hidden="true" />
                     </button>
-                    <button onClick={() => handleDelete(t.id)} className="p-2 rounded-xl hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">
-                      <Trash2 className="h-4 w-4" />
+                    <button
+                      onClick={() => handleDelete(t.id)}
+                      aria-label={`Eliminar ${t.user.name}`}
+                      className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
                     </button>
                   </div>
                 </CardContent>

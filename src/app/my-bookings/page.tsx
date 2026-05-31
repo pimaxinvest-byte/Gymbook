@@ -5,7 +5,8 @@ import { AppShell } from "@/components/layout/app-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/badge";
 import { formatDate, formatTime } from "@/lib/utils";
-import { Loader2, User, MapPin, Clock, Dumbbell } from "lucide-react";
+import { User, MapPin, Clock } from "lucide-react";
+import { BookingCardSkeleton } from "@/components/ui/skeleton";
 
 interface Booking {
   id: string;
@@ -55,7 +56,9 @@ export default function MyBookingsPage() {
         </div>
 
         {loading ? (
-          <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-indigo-400" /></div>
+          <div className="space-y-3" aria-label="Cargando reservas..." aria-busy="true">
+            {[1, 2, 3].map((i) => <BookingCardSkeleton key={i} />)}
+          </div>
         ) : displayed.length === 0 ? (
           <div className="text-center py-16">
             <div className="text-5xl mb-4">📋</div>

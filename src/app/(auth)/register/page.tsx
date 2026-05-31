@@ -63,7 +63,10 @@ export default function RegisterPage() {
             <Input label="Contraseña" type="password" placeholder="••••••••" error={errors.password?.message} {...register("password")} />
 
             {error && (
-              <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-600">{error}</div>
+              <div role="alert" aria-live="assertive" className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 font-medium flex items-center gap-2">
+                <span aria-hidden="true">⚠️</span>
+                {error}
+              </div>
             )}
 
             <Button type="submit" size="lg" className="mt-2 w-full" disabled={loading}>

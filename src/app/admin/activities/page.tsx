@@ -55,8 +55,8 @@ export default function ActivitiesPage() {
                     <p className="text-xs text-gray-500">{a.defaultDuration} min · Máx. {a.maxCapacity} personas</p>
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => setEditItem(a)} className="p-2 rounded-xl hover:bg-gray-100 text-gray-400 transition-colors"><Edit2 className="h-4 w-4" /></button>
-                    <button onClick={() => handleDelete(a.id)} className="p-2 rounded-xl hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"><Trash2 className="h-4 w-4" /></button>
+                    <button onClick={() => setEditItem(a)} aria-label={`Editar ${a.name}`} className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl hover:bg-gray-100 text-gray-400 transition-colors cursor-pointer"><Edit2 className="h-4 w-4" aria-hidden="true" /></button>
+                    <button onClick={() => handleDelete(a.id)} aria-label={`Eliminar ${a.name}`} className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors cursor-pointer"><Trash2 className="h-4 w-4" aria-hidden="true" /></button>
                   </div>
                 </CardContent>
               </Card>

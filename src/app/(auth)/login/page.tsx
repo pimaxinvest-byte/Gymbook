@@ -78,7 +78,8 @@ export default function LoginPage() {
             />
 
             {error && (
-              <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-600">
+              <div role="alert" aria-live="assertive" className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 font-medium flex items-center gap-2">
+                <span aria-hidden="true">⚠️</span>
                 {error}
               </div>
             )}

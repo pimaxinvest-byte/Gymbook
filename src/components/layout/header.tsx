@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession, signOut } from "next-auth/react";
-import { Bell, LogOut, Menu } from "lucide-react";
+import { Bell, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
 
@@ -19,9 +19,12 @@ export function Header({ title, gymName = "GymBook", logoUrl }: HeaderProps) {
       <div className="flex items-center justify-between h-14 px-4">
         <div className="flex items-center gap-2.5">
           {logoUrl ? (
-            <Image src={logoUrl} alt={gymName} width={28} height={28} className="rounded-lg object-contain" />
+            <Image src={logoUrl} alt={`Logo de ${gymName}`} width={28} height={28} className="rounded-lg object-contain" />
           ) : (
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center">
+            <div
+              className="w-8 h-8 rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center shadow-sm"
+              aria-hidden="true"
+            >
               <span className="text-white text-xs font-black">G</span>
             </div>
           )}
@@ -32,12 +35,23 @@ export function Header({ title, gymName = "GymBook", logoUrl }: HeaderProps) {
         </div>
 
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" className="relative">
-            <Bell className="h-5 w-5" />
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Notificaciones"
+            className="relative text-gray-500 hover:text-gray-700"
+          >
+            <Bell className="h-5 w-5" aria-hidden="true" />
           </Button>
           {session && (
-            <Button variant="ghost" size="icon" onClick={() => signOut({ callbackUrl: "/login" })}>
-              <LogOut className="h-5 w-5" />
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Cerrar sesión"
+              onClick={() => signOut({ callbackUrl: "/login" })}
+              className="text-gray-500 hover:text-red-500"
+            >
+              <LogOut className="h-5 w-5" aria-hidden="true" />
             </Button>
           )}
         </div>

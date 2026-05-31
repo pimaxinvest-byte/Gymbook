@@ -177,7 +177,7 @@ export default function SettingsPage() {
               { href: "/admin/activities", label: "🏃 Actividades" },
               { href: "/admin/dashboard", label: "📊 Dashboard" },
             ].map((item) => (
-              <a key={item.href} href={item.href} className="flex items-center justify-between py-3 border-b border-gray-50 last:border-0 text-sm font-medium text-gray-800 hover:text-indigo-600 transition-colors">
+              <a key={item.href} href={item.href} className="flex items-center justify-between py-3 border-b border-gray-50 last:border-0 text-sm font-medium text-gray-800 hover:text-orange-500 transition-colors cursor-pointer">
                 {item.label}
                 <span className="text-gray-400">›</span>
               </a>
