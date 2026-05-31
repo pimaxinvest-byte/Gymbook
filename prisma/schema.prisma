@@ -95,14 +95,15 @@ model User {
 }
 
 model Teacher {
-  id          String    @id @default(cuid())
-  userId      String    @unique
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  color       String    @default("#f97316")
-  bio         String?
-  specialties String[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  color           String    @default("#f97316")
+  bio             String?
+  specialties     String[]
+  paymentsEnabled Boolean   @default(true)  // on/off for payment management
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   bookings          Booking[]
   availabilitySlots AvailabilitySlot[]
@@ -111,6 +112,7 @@ model Teacher {
   teacherActivities TeacherActivity[]
   preferringClients Client[]           @relation("ClientPreferredTeacher")
   harbizConnection  TeacherHarbizConnection?
+  billingSettings   TeacherBillingSettings?
 }
 
 // Many-to-many: Teacher <-> Activity
@@ -461,4 +463,74 @@ model ExternalSyncLog {
 
   @@index([connectionId])
   @@index([startedAt])
+}
+
+// ─── Bonos (Credit Package Presets) ──────────────────────────────────────────
+
+model CreditPackagePreset {
+  id         String     @id @default(cuid())
+  name       String                        // "Bono 10 clases"
+  sessions   Int                           // number of credits/sessions
+  price      Float                         // selling price in €
+  creditType CreditType @default(INDIVIDUAL)
+  isActive   Boolean    @default(true)
+  sortOrder  Int        @default(0)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+}
+
+// ─── Facturación por profesor ─────────────────────────────────────────────────
+
+model TeacherBillingSettings {
+  id              String   @id @default(cuid())
+  teacherId       String   @unique
+  teacher         Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  businessName    String?                    // nombre autónomo / empresa
+  nif             String?                    // NIF / CIF
+  address         String?
+  city            String?
+  postalCode      String?
+  phone           String?
+  email           String?
+  issueDocuments  Boolean  @default(false)   // habilitar emisión de tiques/facturas
+  documentType    String   @default("TICKET") // "TICKET" | "INVOICE"
+  invoicePrefix   String   @default("FAC")
+  ticketPrefix    String   @default("TIC")
+  lastInvoiceNum  Int      @default(0)
+  lastTicketNum   Int      @default(0)
+  footerNote      String?                    // e.g. "IVA incluido"
+  updatedAt       DateTime @updatedAt
+
+  invoices Invoice[]
+
+  @@index([teacherId])
+}
+
+model Invoice {
+  id                String                 @id @default(cuid())
+  number            String                             // "FAC-2025-001"
+  type              String                             // "TICKET" | "INVOICE"
+  billingSettingsId String
+  billingSettings   TeacherBillingSettings @relation(fields: [billingSettingsId], references: [id])
+  // Denormalized snapshot (archive-safe)
+  teacherName       String
+  teacherNif        String?
+  teacherAddress    String?
+  clientName        String
+  clientEmail       String?
+  clientNif         String?
+  // Line items
+  items             Json                               // [{description, qty, unitPrice, total}]
+  subtotal          Float
+  taxRate           Float    @default(0)
+  taxAmount         Float    @default(0)
+  total             Float
+  date              DateTime @default(now())
+  status            String   @default("ISSUED")        // "ISSUED" | "CANCELLED"
+  creditPackageId   String?                            // optional link to ClientCredits
+  notes             String?
+  createdAt         DateTime @default(now())
+
+  @@index([billingSettingsId])
+  @@index([date])
 }

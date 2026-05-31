@@ -16,7 +16,10 @@ export async function GET() {
     orderBy: { user: { name: "asc" } },
   });
 
-  return NextResponse.json(teachers);
+  // Ensure paymentsEnabled is always present (default true)
+  const withPayments = teachers.map((t) => ({ ...t, paymentsEnabled: t.paymentsEnabled ?? true }));
+
+  return NextResponse.json(withPayments);
 }
 
 const createSchema = z.object({

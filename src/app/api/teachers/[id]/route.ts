@@ -11,7 +11,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const { id } = await params;
   const body = await req.json();
-  const { name, email, color, bio, specialties, telegramChatId, password } = body;
+  const { name, email, color, bio, specialties, telegramChatId, password, paymentsEnabled } = body;
 
   const teacher = await prisma.teacher.findUnique({ where: { id }, include: { user: true } });
   if (!teacher) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -35,6 +35,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       ...(color      && { color }),
       ...(bio !== undefined && { bio }),
       ...(specialties && { specialties }),
+      ...(paymentsEnabled !== undefined && { paymentsEnabled }),
     },
     include: {
       user: { select: { id: true, name: true, email: true, telegramChatId: true, telegramConnected: true, telegramUsername: true, avatarUrl: true } },

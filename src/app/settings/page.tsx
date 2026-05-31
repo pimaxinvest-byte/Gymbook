@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
-import { Loader2, Save, Send, Shield, MessageCircle, ExternalLink } from "lucide-react";
+import { Loader2, Save, Send, Shield, MessageCircle, ExternalLink, Plus, Trash2, Receipt } from "lucide-react";
 import { toast } from "@/components/ui/toaster";
 import { useSession } from "next-auth/react";
 
@@ -42,6 +42,32 @@ interface Profile {
   telegramUsername?: string | null;
 }
 
+interface BonoPreset {
+  id: string;
+  name: string;
+  sessions: number;
+  price: number;
+  creditType: "INDIVIDUAL" | "SGT";
+  isActive: boolean;
+  sortOrder: number;
+}
+
+interface BillingSettings {
+  id?: string;
+  businessName?: string;
+  nif?: string;
+  address?: string;
+  city?: string;
+  postalCode?: string;
+  phone?: string;
+  email?: string;
+  issueDocuments?: boolean;
+  documentType?: "TICKET" | "INVOICE";
+  invoicePrefix?: string;
+  ticketPrefix?: string;
+  footerNote?: string;
+}
+
 export default function SettingsPage() {
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "ADMIN";
@@ -56,9 +82,20 @@ export default function SettingsPage() {
   const [testingTelegram, setTestingTelegram] = useState(false);
   const [connectingTelegram, setConnectingTelegram] = useState(false);
 
+  // Bonos
+  const [bonoPresets, setBonoPresets] = useState<BonoPreset[]>([]);
+  const [newBono, setNewBono] = useState({ name: "", sessions: 10, price: 0, creditType: "INDIVIDUAL" as "INDIVIDUAL" | "SGT" });
+  const [savingBono, setSavingBono] = useState(false);
+
+  // Billing settings (teacher's own)
+  const [billing, setBilling] = useState<Partial<BillingSettings>>({});
+  const [savingBilling, setSavingBilling] = useState(false);
+
   useEffect(() => {
     const promises: Promise<void>[] = [
       fetch("/api/profile").then((r) => r.json()).then(setProfile),
+      fetch("/api/admin/bono-presets").then((r) => r.json()).then((d) => Array.isArray(d) && setBonoPresets(d)),
+      fetch("/api/teacher/billing").then((r) => r.json()).then((d) => d && !d.error && setBilling(d)),
     ];
     if (isAdmin) {
       promises.push(
@@ -124,6 +161,58 @@ export default function SettingsPage() {
       toast({ title: "Error: configura el bot de Telegram en ajustes admin", variant: "error" });
     }
     setConnectingTelegram(false);
+  }
+
+  async function addBonoPreset() {
+    if (!newBono.name || newBono.price <= 0) { toast({ title: "Completa nombre y precio", variant: "error" }); return; }
+    setSavingBono(true);
+    const r = await fetch("/api/admin/bono-presets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...newBono, sortOrder: bonoPresets.length }),
+    });
+    if (r.ok) {
+      const p = await r.json();
+      setBonoPresets((prev) => [...prev, p]);
+      setNewBono({ name: "", sessions: 10, price: 0, creditType: "INDIVIDUAL" });
+      toast({ title: "Bono creado", variant: "success" });
+    } else {
+      toast({ title: "Error al crear bono", variant: "error" });
+    }
+    setSavingBono(false);
+  }
+
+  async function deleteBono(id: string) {
+    if (!confirm("¿Eliminar este bono?")) return;
+    const r = await fetch(`/api/admin/bono-presets?id=${id}`, { method: "DELETE" });
+    if (r.ok) {
+      setBonoPresets((prev) => prev.filter((b) => b.id !== id));
+      toast({ title: "Bono eliminado", variant: "success" });
+    }
+  }
+
+  async function toggleBonoActive(bono: BonoPreset) {
+    const r = await fetch("/api/admin/bono-presets", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: bono.id, isActive: !bono.isActive }),
+    });
+    if (r.ok) {
+      const updated = await r.json();
+      setBonoPresets((prev) => prev.map((b) => b.id === bono.id ? updated : b));
+    }
+  }
+
+  async function saveBilling() {
+    setSavingBilling(true);
+    const r = await fetch("/api/teacher/billing", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(billing),
+    });
+    toast({ title: r.ok ? "Datos de facturación guardados" : "Error", variant: r.ok ? "success" : "error" });
+    if (r.ok) setBilling(await r.json());
+    setSavingBilling(false);
   }
 
   if (loading) {
@@ -315,6 +404,71 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
 
+            {/* Bonos (credit package presets) */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Receipt className="h-4 w-4 text-orange-500" />
+                  Bonos de créditos
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-xs text-gray-500">Los bonos permiten vender paquetes de créditos a los clientes. El precio por clase se calcula automáticamente.</p>
+
+                {/* Existing presets */}
+                <div className="space-y-2">
+                  {bonoPresets.map((b) => (
+                    <div key={b.id} className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-colors ${b.isActive ? "border-orange-200 bg-orange-50" : "border-gray-100 bg-gray-50 opacity-60"}`}>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-800">{b.name}</p>
+                        <p className="text-xs text-gray-500">
+                          {b.sessions} clases · <span className="font-semibold text-orange-600">{b.price}€</span>
+                          <span className="ml-2 text-gray-400">({(b.price / b.sessions).toFixed(1)}€/clase)</span>
+                          {b.creditType === "SGT" && <span className="ml-2 bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded text-xs">SGT</span>}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => toggleBonoActive(b)}
+                        className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border-2 cursor-pointer transition-colors ${b.isActive ? "border-green-200 bg-green-50 text-green-700" : "border-gray-200 bg-white text-gray-500"}`}
+                      >
+                        {b.isActive ? "Activo" : "Inactivo"}
+                      </button>
+                      <button onClick={() => deleteBono(b.id)} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors cursor-pointer">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                  {bonoPresets.length === 0 && <p className="text-sm text-gray-400 text-center py-2">No hay bonos configurados</p>}
+                </div>
+
+                {/* Add new */}
+                <div className="rounded-xl border-2 border-dashed border-gray-200 p-3 space-y-2">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Nuevo bono</p>
+                  <Input label="Nombre" placeholder="Ej: Bono 10 clases" value={newBono.name} onChange={(e) => setNewBono((p) => ({ ...p, name: e.target.value }))} />
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input label="Nº clases" type="number" min={1} value={newBono.sessions} onChange={(e) => setNewBono((p) => ({ ...p, sessions: parseInt(e.target.value) || 1 }))} />
+                    <Input label="Precio (€)" type="number" min={0} step={0.01} value={newBono.price} onChange={(e) => setNewBono((p) => ({ ...p, price: parseFloat(e.target.value) || 0 }))} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(["INDIVIDUAL", "SGT"] as const).map((t) => (
+                      <button key={t} type="button" onClick={() => setNewBono((p) => ({ ...p, creditType: t }))}
+                        className={`h-10 rounded-xl text-xs font-semibold border-2 transition-colors cursor-pointer ${newBono.creditType === t ? "border-orange-500 bg-orange-50 text-orange-700" : "border-gray-200 bg-white text-gray-600"}`}>
+                        {t === "INDIVIDUAL" ? "Individual" : "SGT Grupo"}
+                      </button>
+                    ))}
+                  </div>
+                  {newBono.name && newBono.price > 0 && (
+                    <p className="text-xs text-center text-gray-500">
+                      Precio por clase: <span className="font-semibold text-orange-600">{(newBono.price / newBono.sessions).toFixed(2)}€</span>
+                    </p>
+                  )}
+                  <Button size="lg" className="w-full" onClick={addBonoPreset} disabled={savingBono}>
+                    {savingBono ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Plus className="h-4 w-4" /> Añadir bono</>}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Admin links */}
             <Card>
               <CardHeader><CardTitle>Gestión</CardTitle></CardHeader>
@@ -336,7 +490,77 @@ export default function SettingsPage() {
           </>
         )}
 
-        <p className="text-center text-xs text-gray-400 pb-4">GymBook v1.2.0 · Creado por Pietro</p>
+        {/* Billing / invoice settings — visible to teachers and admins */}
+        {(session?.user?.role === "TEACHER" || session?.user?.role === "ADMIN") && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Receipt className="h-4 w-4 text-orange-500" />
+                Facturación
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-xs text-gray-500">Configura tus datos fiscales para emitir tiques o facturas a clientes.</p>
+
+              {/* Enable toggle */}
+              <label className="flex items-center justify-between py-2 border-b border-gray-100 cursor-pointer">
+                <div>
+                  <span className="text-sm font-medium text-gray-700">Emitir tiques / facturas</span>
+                  <p className="text-xs text-gray-400">Activa para poder generar documentos al vender bonos</p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={!!billing.issueDocuments}
+                  onChange={(e) => setBilling((b) => ({ ...b, issueDocuments: e.target.checked }))}
+                  className="w-5 h-5 rounded accent-orange-500"
+                />
+              </label>
+
+              {billing.issueDocuments && (
+                <>
+                  {/* Document type */}
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 mb-2">Tipo de documento por defecto</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {(["TICKET", "INVOICE"] as const).map((t) => (
+                        <button key={t} type="button" onClick={() => setBilling((b) => ({ ...b, documentType: t }))}
+                          className={`h-10 rounded-xl text-sm font-semibold border-2 transition-colors cursor-pointer ${billing.documentType === t ? "border-orange-500 bg-orange-50 text-orange-700" : "border-gray-200 bg-white text-gray-600"}`}>
+                          {t === "TICKET" ? "Tique" : "Factura"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input label="Prefijo factura" placeholder="FAC" value={billing.invoicePrefix ?? "FAC"} onChange={(e) => setBilling((b) => ({ ...b, invoicePrefix: e.target.value }))} />
+                    <Input label="Prefijo tique" placeholder="TIC" value={billing.ticketPrefix ?? "TIC"} onChange={(e) => setBilling((b) => ({ ...b, ticketPrefix: e.target.value }))} />
+                  </div>
+                </>
+              )}
+
+              <Input label="Nombre / Razón social" value={billing.businessName ?? ""} onChange={(e) => setBilling((b) => ({ ...b, businessName: e.target.value }))} />
+              <Input label="NIF / CIF" value={billing.nif ?? ""} onChange={(e) => setBilling((b) => ({ ...b, nif: e.target.value }))} />
+              <Input label="Dirección" value={billing.address ?? ""} onChange={(e) => setBilling((b) => ({ ...b, address: e.target.value }))} />
+              <div className="grid grid-cols-2 gap-2">
+                <Input label="Ciudad" value={billing.city ?? ""} onChange={(e) => setBilling((b) => ({ ...b, city: e.target.value }))} />
+                <Input label="CP" value={billing.postalCode ?? ""} onChange={(e) => setBilling((b) => ({ ...b, postalCode: e.target.value }))} />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Input label="Teléfono" value={billing.phone ?? ""} onChange={(e) => setBilling((b) => ({ ...b, phone: e.target.value }))} />
+                <Input label="Email fiscal" value={billing.email ?? ""} onChange={(e) => setBilling((b) => ({ ...b, email: e.target.value }))} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Nota al pie</label>
+                <textarea rows={2} value={billing.footerNote ?? ""} onChange={(e) => setBilling((b) => ({ ...b, footerNote: e.target.value }))} placeholder="Ej: IVA incluido · Autónomo en módulos" className="w-full rounded-xl border-2 border-gray-200 px-4 py-2.5 text-sm focus:border-orange-400 focus:outline-none resize-none" />
+              </div>
+              <Button size="lg" className="w-full" onClick={saveBilling} disabled={savingBilling}>
+                {savingBilling ? <Loader2 className="h-5 w-5 animate-spin" /> : <><Save className="h-4 w-4" /> Guardar facturación</>}
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        <p className="text-center text-xs text-gray-400 pb-4">GymBook v1.3.0 · Creado por Pietro</p>
       </div>
     </AppShell>
   );

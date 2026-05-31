@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Edit2, Trash2, Loader2, X, MessageCircle, Copy, Check, Send, UserPlus, Mail, ExternalLink, RefreshCw, KeyRound } from "lucide-react";
+import { Plus, Edit2, Trash2, Loader2, X, MessageCircle, Copy, Check, Send, UserPlus, Mail, ExternalLink, RefreshCw, KeyRound, CreditCard } from "lucide-react";
 import { CardSkeleton } from "@/components/ui/skeleton";
 import { Avatar } from "@/components/ui/avatar";
 import { toast } from "@/components/ui/toaster";
@@ -16,6 +16,7 @@ interface Teacher {
   id: string;
   color: string;
   bio?: string;
+  paymentsEnabled: boolean;
   user: { id: string; name: string; email: string; telegramChatId?: string | null; telegramConnected: boolean; telegramUsername?: string | null; avatarUrl?: string | null };
   teacherActivities: { activity: Activity }[];
 }
@@ -82,6 +83,21 @@ export default function TeachersPage() {
       toast({ title: d.error || "Error", variant: "error" });
     }
     setBroadcasting(false);
+  }
+
+  async function togglePayments(teacher: Teacher) {
+    const next = !teacher.paymentsEnabled;
+    const r = await fetch(`/api/teachers/${teacher.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paymentsEnabled: next }),
+    });
+    if (r.ok) {
+      toast({ title: next ? "Pagos activados" : "Pagos desactivados", variant: "success" });
+      load();
+    } else {
+      toast({ title: "Error", variant: "error" });
+    }
   }
 
   async function removeActivity(teacherId: string, activityId: string) {
@@ -172,6 +188,18 @@ export default function TeachersPage() {
                         className="w-9 h-9 flex items-center justify-center rounded-xl bg-orange-50 text-orange-500 hover:bg-orange-100 transition-colors cursor-pointer"
                       >
                         <RefreshCw className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => togglePayments(t)}
+                        aria-label={t.paymentsEnabled ? "Desactivar pagos" : "Activar pagos"}
+                        title={t.paymentsEnabled ? "Pagos ON — clic para desactivar" : "Pagos OFF — clic para activar"}
+                        className={`w-9 h-9 flex items-center justify-center rounded-xl transition-colors cursor-pointer ${
+                          t.paymentsEnabled
+                            ? "bg-green-50 text-green-600 hover:bg-green-100"
+                            : "bg-gray-100 text-gray-400 hover:bg-gray-200"
+                        }`}
+                      >
+                        <CreditCard className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => setEditTeacher(t)}
