@@ -13,6 +13,7 @@ interface AvailableSlot {
   startDatetime: string;
   endDatetime: string;
   status: "AVAILABLE";
+  sessionType: "INDIVIDUAL" | "SGT";
   teacher: { id: string; color: string; user: { name: string } };
   activity: { name: string };
   space: { name: string };
@@ -20,6 +21,7 @@ interface AvailableSlot {
 
 interface CreditBalance {
   teacherId: string;
+  creditType: string;
   balance: number;
 }
 
@@ -36,7 +38,8 @@ export default function BookPage() {
     if (res.ok) {
       const data: CreditBalance[] = await res.json();
       const map: Record<string, number> = {};
-      data.forEach((c) => { map[c.teacherId] = c.balance; });
+      // Key: `${teacherId}_${creditType}` to avoid INDIVIDUAL/SGT collision
+      data.forEach((c) => { map[`${c.teacherId}_${c.creditType}`] = c.balance; });
       setCreditMap(map);
     }
   }, []);
@@ -56,13 +59,14 @@ export default function BookPage() {
         id: string;
         start: string;
         end: string;
-        extendedProps: { teacherName: string; activityName: string; spaceName: string; teacherId: string };
+        extendedProps: { teacherName: string; activityName: string; spaceName: string; teacherId: string; sessionType?: string };
         backgroundColor: string;
       }) => ({
         id: e.id,
         startDatetime: e.start,
         endDatetime: e.end,
         status: "AVAILABLE" as const,
+        sessionType: (e.extendedProps.sessionType ?? "INDIVIDUAL") as "INDIVIDUAL" | "SGT",
         teacher: { id: e.extendedProps.teacherId, color: e.backgroundColor, user: { name: e.extendedProps.teacherName } },
         activity: { name: e.extendedProps.activityName },
         space: { name: e.extendedProps.spaceName },
@@ -123,30 +127,33 @@ export default function BookPage() {
           </select>
         </div>
 
-        {/* Credit summary */}
+        {/* Credit summary — one chip per teacher×creditType combination */}
         {Object.keys(creditMap).length > 0 && (
           <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {teachers
-              .filter((t) => creditMap[t.id] !== undefined)
-              .map((t) => {
-                const bal = creditMap[t.id] ?? 0;
-                return (
-                  <div
-                    key={t.id}
-                    className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium ${
-                      bal === 0
-                        ? "bg-red-50 text-red-700 border border-red-100"
-                        : bal <= 2
-                        ? "bg-amber-50 text-amber-700 border border-amber-100"
-                        : "bg-green-50 text-green-700 border border-green-100"
-                    }`}
-                  >
-                    <CreditCard className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
-                    <span className="truncate">{t.user.name}</span>
-                    <span className="ml-auto font-black">{bal}</span>
-                  </div>
-                );
-              })}
+            {Object.entries(creditMap).map(([key, bal]) => {
+              const [teacherId, creditType] = key.split("_");
+              const teacher = teachers.find((t) => t.id === teacherId);
+              if (!teacher) return null;
+              return (
+                <div
+                  key={key}
+                  className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium ${
+                    bal === 0
+                      ? "bg-red-50 text-red-700 border border-red-100"
+                      : bal <= 2
+                      ? "bg-amber-50 text-amber-700 border border-amber-100"
+                      : "bg-green-50 text-green-700 border border-green-100"
+                  }`}
+                >
+                  <CreditCard className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+                  <span className="truncate">{teacher.user.name}</span>
+                  {creditType === "SGT" && (
+                    <span className="text-[9px] font-bold bg-purple-100 text-purple-600 rounded px-1">SGT</span>
+                  )}
+                  <span className="ml-auto font-black">{bal}</span>
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -171,7 +178,8 @@ export default function BookPage() {
                 </h3>
                 <div className="space-y-2">
                   {daySlots.map((slot) => {
-                    const credits = creditMap[slot.teacher.id];
+                    const creditKey = `${slot.teacher.id}_${slot.sessionType}`;
+                    const credits = creditMap[creditKey];
                     const hasCredits = credits === undefined || credits > 0;
                     const creditsAssigned = credits !== undefined;
 
@@ -183,7 +191,12 @@ export default function BookPage() {
 
                           <div className="flex-1 p-4 flex items-center justify-between gap-3">
                             <div className="space-y-1 min-w-0">
-                              <p className="font-semibold text-gray-900 text-sm">{slot.activity.name}</p>
+                              <div className="flex items-center gap-2">
+                                <p className="font-semibold text-gray-900 text-sm">{slot.activity.name}</p>
+                                {slot.sessionType === "SGT" && (
+                                  <span className="text-[10px] bg-purple-100 text-purple-700 rounded-full px-2 py-0.5 font-semibold">SGT</span>
+                                )}
+                              </div>
                               <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-gray-500">
                                 <span className="flex items-center gap-1">
                                   <User className="h-3 w-3" aria-hidden="true" />

@@ -142,7 +142,7 @@ function FilterSelect({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full h-10 rounded-xl border-2 border-gray-200 bg-white px-3 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none"
+        className="w-full h-10 rounded-xl border-2 border-gray-200 bg-white px-3 text-sm text-gray-900 focus:border-orange-400 focus:outline-none"
       >
         <option value="">Todos</option>
         {options.map((o) => (
