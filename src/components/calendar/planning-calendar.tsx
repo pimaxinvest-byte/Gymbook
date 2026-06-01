@@ -9,7 +9,7 @@ import { BookingDetailModal } from "@/components/booking/booking-detail-modal";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "@/components/ui/toaster";
-import { Users, X, Copy, Loader2, CalendarCheck } from "lucide-react";
+import { Users, X, Copy, Loader2 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -222,24 +222,41 @@ export function PlanningCalendar({ teacherFilter, onRefreshKey }: PlanningCalend
             }
           }}
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          eventDidMount={(info: any) => {
-            // Add visual indicator when selected
-            const update = () => {
-              const sel = isSelected(info.event.id);
-              if (sel) info.el.classList.add("fc-event-selected");
-              else info.el.classList.remove("fc-event-selected");
-            };
-            update();
-          }}
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           eventContent={(info: any) => {
             const ep = info.event.extendedProps;
             const isSGT = ep.sessionType === "SGT";
+            const ev = events.find(e => e.id === info.event.id);
             const sel = isSelected(info.event.id);
             return (
-              <div className={`px-1 py-0.5 overflow-hidden h-full ${sel ? "ring-2 ring-white rounded" : ""}`}>
-                {sel && <span className="absolute top-0.5 right-0.5 w-3 h-3 rounded-full bg-white flex items-center justify-center"><CalendarCheck className="h-2 w-2 text-orange-500" /></span>}
-                <div className="font-semibold text-[11px] leading-tight truncate">
+              <div className={`relative px-1 py-0.5 overflow-hidden h-full w-full ${sel ? "ring-2 ring-white ring-inset rounded" : ""}`}>
+                {/* Tap-friendly selection checkbox — always visible in top-right */}
+                <div
+                  className="absolute top-0.5 right-0.5 w-5 h-5 rounded-sm flex items-center justify-center cursor-pointer z-10 transition-all select-none"
+                  style={{
+                    backgroundColor: sel ? "rgba(255,255,255,0.95)" : "rgba(0,0,0,0.18)",
+                    border: sel ? "2px solid transparent" : "2px solid rgba(255,255,255,0.55)",
+                    touchAction: "manipulation",
+                  }}
+                  onTouchEnd={(e) => {
+                    e.stopPropagation();
+                    e.nativeEvent.stopImmediatePropagation();
+                    if (ev) toggleSelect(ev);
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.nativeEvent.stopImmediatePropagation();
+                    if (ev) toggleSelect(ev);
+                  }}
+                >
+                  {sel && (
+                    <svg viewBox="0 0 12 12" className="w-3 h-3 flex-shrink-0" fill="none">
+                      <path d="M2 6l3 3 5-5" stroke="#f97316" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                </div>
+
+                {/* Activity name — padded right so checkbox never overlaps text */}
+                <div className="font-semibold text-[11px] leading-tight truncate pr-6">
                   {ep.activityName}
                   {isSGT && <span className="ml-1 text-[9px] bg-white/30 rounded px-1">SGT {ep.occupancy}/{ep.capacity}</span>}
                 </div>

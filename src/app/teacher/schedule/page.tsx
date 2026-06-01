@@ -127,7 +127,7 @@ export default function TeacherSchedulePage() {
               <span className="w-4 h-3 rounded bg-purple-500 inline-block" />
               SGT
             </span>
-            <span className="text-gray-400">· Click = detalle · Ctrl+Click = seleccionar múltiples</span>
+            <span className="text-gray-400">· Click = detalle · □ = seleccionar</span>
           </div>
           <div className="flex gap-2">
             <Button size="sm" variant="outline" onClick={handleExportICS} disabled={exporting}>
