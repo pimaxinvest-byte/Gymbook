@@ -20,7 +20,9 @@ import type {
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const SimpleDDPCtor = require("simpleddp");
 
-const HARBIZ_WS_ENDPOINT = "wss://app.harbiz.io/sockjs";
+// Standard Meteor DDP WebSocket endpoint (NOT SockJS /info — that causes a timeout).
+// Meteor exposes DDP over plain WebSocket at /websocket.
+const HARBIZ_WS_ENDPOINT = "wss://app.harbiz.io/websocket";
 const CONNECT_TIMEOUT_MS = 30_000;
 const CALL_TIMEOUT_MS = 20_000;
 

@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
       id: true,
       teacherId: true,
       harbizEmail: true,
-      // Never return harbizPasswordEncrypted
+      harbizPasswordEncrypted: true, // only to check presence, never returned to client
       harbizProfId: true,
       lastSyncAt: true,
       isActive: true,
@@ -44,10 +44,21 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ configured: false });
   }
 
+  const hasDbPassword = !!connection.harbizPasswordEncrypted;
+  const hasEnvPassword = !!(process.env.HARBIZ_PASSWORD);
+
   return NextResponse.json({
     configured: true,
-    hasPassword: true, // if record exists, password is set (or uses env vars)
-    ...connection,
+    hasPassword: hasDbPassword || hasEnvPassword,
+    hasDbPassword,
+    hasEnvPassword,
+    harbizEmail: connection.harbizEmail,
+    harbizProfId: connection.harbizProfId,
+    lastSyncAt: connection.lastSyncAt,
+    isActive: connection.isActive,
+    createdAt: connection.createdAt,
+    id: connection.id,
+    teacherId: connection.teacherId,
   });
 }
 

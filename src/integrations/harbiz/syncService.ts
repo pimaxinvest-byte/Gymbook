@@ -82,16 +82,21 @@ export async function runHarbizSync(opts: HarbizSyncOptions): Promise<HarbizSync
       try {
         harbizPassword = decrypt(connection.harbizPasswordEncrypted);
       } catch {
-        throw new Error("Error decrypting Harbiz password — check NEXTAUTH_SECRET");
+        throw new Error("Error descifrando la contraseña de Harbiz. Comprueba que NEXTAUTH_SECRET no ha cambiado, o vuelve a guardar la contraseña desde Admin → Profesores.");
       }
     } else {
       harbizEmail = process.env.HARBIZ_EMAIL;
       harbizPassword = process.env.HARBIZ_PASSWORD;
     }
 
-    if (!harbizEmail || !harbizPassword) {
+    if (!harbizEmail) {
       throw new Error(
-        "No hay credenciales Harbiz configuradas. Añade las credenciales en el perfil del profesor o configura HARBIZ_EMAIL y HARBIZ_PASSWORD como variables de entorno."
+        "Falta el email de Harbiz. Ve a Admin → Profesores → Max Romeo → Harbiz y guarda el email y la contraseña."
+      );
+    }
+    if (!harbizPassword) {
+      throw new Error(
+        `Falta la contraseña de Harbiz para ${harbizEmail}. Ve a Admin → Profesores → Max Romeo → Harbiz y guarda la contraseña. (La contraseña no se almacena en claro — debes introducirla de nuevo.)`
       );
     }
 
