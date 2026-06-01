@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, Calendar, Users, TrendingUp, CreditCard, CheckCircle, XCircle, Clock, RefreshCw, ClipboardList, BarChart2 } from "lucide-react";
+import { Loader2, Calendar, Users, TrendingUp, CreditCard, CheckCircle, XCircle, Clock, RefreshCw, ClipboardList, BarChart2, ScrollText } from "lucide-react";
 import Link from "next/link";
 
 interface TeacherStats {
@@ -73,8 +73,11 @@ export default function TeacherDashboardPage() {
           <Link href="/teacher/clients">
             <Button size="sm" variant="outline"><Users className="h-4 w-4" /> Clientes</Button>
           </Link>
-          <Link href="/admin/harbiz">
+          <Link href="/teacher/import">
             <Button size="sm" variant="outline"><RefreshCw className="h-4 w-4" /> Importar Harbiz</Button>
+          </Link>
+          <Link href="/teacher/logs">
+            <Button size="sm" variant="outline"><ScrollText className="h-4 w-4" /> Registro</Button>
           </Link>
           <Button size="sm" variant="outline" onClick={load}>
             <RefreshCw className="h-4 w-4" /> Actualizar
@@ -185,7 +188,7 @@ export default function TeacherDashboardPage() {
             <p className="text-sm font-semibold text-gray-800">Importar desde Harbiz</p>
             <p className="text-xs text-gray-400 mt-0.5">Sincroniza clientes, sesiones y bonos</p>
           </div>
-          <Link href="/admin/harbiz">
+          <Link href="/teacher/import">
             <Button size="sm" variant="outline">
               <RefreshCw className="h-4 w-4" /> Importar
             </Button>

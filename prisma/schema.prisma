@@ -113,6 +113,7 @@ model Teacher {
   preferringClients Client[]           @relation("ClientPreferredTeacher")
   harbizConnection  TeacherHarbizConnection?
   billingSettings   TeacherBillingSettings?
+  importPermission  ExternalImportPermission?
 }
 
 // Many-to-many: Teacher <-> Activity
@@ -502,6 +503,21 @@ model TeacherBillingSettings {
   updatedAt       DateTime @updatedAt
 
   invoices Invoice[]
+
+  @@index([teacherId])
+}
+
+// ─── Permisos de importación externa ─────────────────────────────────────────
+
+model ExternalImportPermission {
+  id          String   @id @default(cuid())
+  teacherId   String   @unique
+  teacher     Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  grantedAt   DateTime @default(now())
+  grantedByIp String?                      // IP del consentimiento (auditoría)
+  userAgent   String?                      // UA del consentimiento
+  revokedAt   DateTime?                    // si el profe retira el consentimiento
+  notes       String?                      // texto libre del profe al dar consentimiento
 
   @@index([teacherId])
 }
