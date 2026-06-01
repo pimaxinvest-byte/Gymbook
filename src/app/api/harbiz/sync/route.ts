@@ -5,10 +5,10 @@
  * Query params:
  *   dryRun=true|false  (default: true)
  *
- * Body (optional):
+ * Body (optional, admin only):
  *   { teacherId?: string }
  *
- * Auth: ADMIN only.
+ * Auth: ADMIN or TEACHER (teacher can only sync own data; must have granted import consent).
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -22,8 +22,10 @@ export async function POST(req: NextRequest) {
   if (!session?.user) {
     return NextResponse.json({ error: "No autenticado" }, { status: 401 });
   }
-  if (session.user.role !== "ADMIN") {
-    return NextResponse.json({ error: "Solo administradores" }, { status: 403 });
+  const isAdmin = session.user.role === "ADMIN";
+  const isTeacher = session.user.role === "TEACHER";
+  if (!isAdmin && !isTeacher) {
+    return NextResponse.json({ error: "Acceso denegado" }, { status: 403 });
   }
 
   // ── Parse params ────────────────────────────────────────────────────────
@@ -33,17 +35,34 @@ export async function POST(req: NextRequest) {
   let teacherId: string | undefined;
   try {
     const body = await req.json().catch(() => ({}));
-    teacherId = body?.teacherId;
+    // Only admin can specify an arbitrary teacherId
+    if (isAdmin && body?.teacherId) teacherId = body.teacherId;
   } catch {
     // no body — ok
   }
 
-  // Resolve teacherId: if not provided, use first teacher with a Harbiz connection
-  // or just the first teacher
-  if (!teacherId) {
-    const connection = await prisma.teacherHarbizConnection.findFirst({
-      where: { isActive: true },
+  // Teachers always sync their own account
+  if (isTeacher) {
+    const teacher = await prisma.teacher.findUnique({ where: { userId: session.user.id } });
+    if (!teacher) return NextResponse.json({ error: "Profesor no encontrado" }, { status: 404 });
+    teacherId = teacher.id;
+
+    // Consent check: teacher must have granted import permission
+    const permission = await prisma.externalImportPermission.findUnique({
+      where: { teacherId },
+      select: { revokedAt: true },
     });
+    if (!permission || permission.revokedAt) {
+      return NextResponse.json(
+        { error: "Debes aceptar el consentimiento de importación antes de sincronizar" },
+        { status: 403 }
+      );
+    }
+  }
+
+  // Admins: resolve teacherId if not provided
+  if (isAdmin && !teacherId) {
+    const connection = await prisma.teacherHarbizConnection.findFirst({ where: { isActive: true } });
     if (connection) {
       teacherId = connection.teacherId;
     } else {

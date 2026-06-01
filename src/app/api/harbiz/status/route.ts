@@ -2,7 +2,7 @@
  * GET /api/harbiz/status
  * Returns the last sync status for the current connection.
  *
- * Auth: ADMIN only.
+ * Auth: ADMIN (any connection) or TEACHER (own connection only).
  */
 
 import { NextResponse } from "next/server";
@@ -11,12 +11,24 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET() {
   const session = await auth();
-  if (!session?.user || session.user.role !== "ADMIN") {
+  if (!session?.user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+
+  const isAdmin = session.user.role === "ADMIN";
+  const isTeacher = session.user.role === "TEACHER";
+  if (!isAdmin && !isTeacher) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
 
+  // Resolve connection filter
+  let connectionWhere: { isActive: boolean; teacherId?: string } = { isActive: true };
+  if (isTeacher) {
+    const teacher = await prisma.teacher.findUnique({ where: { userId: session.user.id } });
+    if (!teacher) return NextResponse.json({ configured: false, lastSyncAt: null, recentLogs: [] });
+    connectionWhere = { isActive: true, teacherId: teacher.id };
+  }
+
   const connection = await prisma.teacherHarbizConnection.findFirst({
-    where: { isActive: true },
+    where: connectionWhere,
     include: {
       syncLogs: {
         orderBy: { startedAt: "desc" },
