@@ -31,6 +31,29 @@ import type {
 const PAGE_SIZE = 25;
 const MIN_SYNC_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes between real syncs
 
+/**
+ * Convert anything thrown by simpleddp (or any other source) into a readable string.
+ * Meteor DDP errors arrive as plain objects: { error: 403, reason: "...", errorType: "Meteor.Error" }
+ * — they are NOT Error instances, so `err.message` is undefined and `String(err)` → "[object Object]".
+ */
+function toErrorMsg(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (err && typeof err === "object") {
+    const o = err as Record<string, unknown>;
+    // Meteor.Error shape: { reason, error, message }
+    const text =
+      (typeof o.reason === "string" ? o.reason : null) ??
+      (typeof o.message === "string" ? o.message : null) ??
+      (typeof o.error === "string" ? o.error : null);
+    if (text) {
+      const code = typeof o.error === "number" ? ` [${o.error}]` : "";
+      return `${text}${code}`;
+    }
+    try { return JSON.stringify(err); } catch { /* ignore */ }
+  }
+  return String(err);
+}
+
 // ─── Main entry point ─────────────────────────────────────────────────────────
 
 export async function runHarbizSync(opts: HarbizSyncOptions): Promise<HarbizSyncResult> {
@@ -185,7 +208,7 @@ export async function runHarbizSync(opts: HarbizSyncOptions): Promise<HarbizSync
         }
       } catch (e) {
         // Non-fatal: some clients may have no packs
-        result.errors.push(`Pack fetch error for client ${hc._id.slice(0, 8)}…: ${e instanceof Error ? e.message : String(e)}`);
+        result.errors.push(`Pack fetch error for client ${hc._id.slice(0, 8)}…: ${toErrorMsg(e)}`);
       }
     }
 
@@ -227,7 +250,7 @@ export async function runHarbizSync(opts: HarbizSyncOptions): Promise<HarbizSync
       });
     }
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = toErrorMsg(err);
     result.errors.push(msg);
     result.status = "FAILED";
 
@@ -426,7 +449,7 @@ async function processSession(
       });
       return { entity: "SESSION", action: "CREATE", harbizId: hs._id, gymBookId: booking.id, entityLabel: sessionLabel(hs) };
     } catch (e) {
-      errors.push(`Session create error ${hs._id.slice(0, 8)}…: ${e instanceof Error ? e.message : String(e)}`);
+      errors.push(`Session create error ${hs._id.slice(0, 8)}…: ${toErrorMsg(e)}`);
       return null;
     }
   }
@@ -489,7 +512,7 @@ async function processPack(
       });
       return { entity: "PACK", action: "CREATE", harbizId: hp._id, gymBookId: cc.id, entityLabel: packLabel(hp) };
     } catch (e) {
-      errors.push(`Pack create error ${hp._id.slice(0, 8)}…: ${e instanceof Error ? e.message : String(e)}`);
+      errors.push(`Pack create error ${hp._id.slice(0, 8)}…: ${toErrorMsg(e)}`);
       return null;
     }
   }

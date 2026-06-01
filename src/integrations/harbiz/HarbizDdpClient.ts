@@ -163,14 +163,31 @@ export class HarbizDdpClient {
   private async call(method: string, ...args: unknown[]): Promise<unknown> {
     if (!this.ddp) throw new Error("Not connected to Harbiz");
 
-    return Promise.race([
-      this.ddp.call(method, ...args),
-      new Promise<never>((_, reject) =>
-        setTimeout(
-          () => reject(new Error(`DDP call '${method}' timed out`)),
-          CALL_TIMEOUT_MS
-        )
-      ),
-    ]);
+    try {
+      return await Promise.race([
+        this.ddp.call(method, ...args),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error(`DDP call '${method}' timed out`)),
+            CALL_TIMEOUT_MS
+          )
+        ),
+      ]);
+    } catch (err) {
+      // simpleddp rejects DDP errors as plain objects (Meteor.Error shape), not Error instances.
+      // Normalise them so callers always see a proper Error with a human-readable message.
+      if (err instanceof Error) throw err;
+      if (err && typeof err === "object") {
+        const o = err as Record<string, unknown>;
+        const reason =
+          (typeof o.reason === "string" ? o.reason : null) ??
+          (typeof o.message === "string" ? o.message : null) ??
+          (typeof o.error === "string" ? o.error : null) ??
+          `DDP error ${JSON.stringify(err)}`;
+        const code = typeof o.error === "number" ? ` [${o.error}]` : "";
+        throw new Error(`${reason}${code}`);
+      }
+      throw new Error(String(err));
+    }
   }
 }
