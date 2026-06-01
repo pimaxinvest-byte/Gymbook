@@ -59,6 +59,7 @@ interface AvailableSlot {
 export default function TeacherClientsPage() {
   const { data: session } = useSession();
   const role = session?.user?.role;
+  const [selfTeacherId, setSelfTeacherId] = useState<string | null>(null);
 
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,6 +76,15 @@ export default function TeacherClientsPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // Resolve own teacher id for pre-filling assignment
+  useEffect(() => {
+    if (role === "TEACHER") {
+      fetch("/api/teachers/me").then(r => r.ok ? r.json() : null).then(d => {
+        if (d?.id) setSelfTeacherId(d.id);
+      });
+    }
+  }, [role]);
 
   async function loadCredits(clientId: string) {
     const res = await fetch(`/api/credits?clientId=${clientId}`);
@@ -312,6 +322,7 @@ export default function TeacherClientsPage() {
           onClose={() => setShowAdd(false)}
           onSaved={() => { setShowAdd(false); load(); }}
           isAdmin={role === "ADMIN"}
+          selfTeacherId={selfTeacherId}
         />
       )}
 
@@ -489,100 +500,228 @@ function BookForClientModal({
 }
 
 // ── Add Client Modal ──────────────────────────────────────────────────────────
+// Two tabs: "Existente" (assign existing) | "Nuevo" (create brand-new client)
+
+type Teacher = { id: string; user: { name: string } };
 
 function AddClientModal({
   onClose,
   onSaved,
   isAdmin,
+  selfTeacherId,
 }: {
   onClose: () => void;
   onSaved: () => void;
   isAdmin: boolean;
+  selfTeacherId: string | null;
 }) {
-  const [clients, setClients] = useState<ClientInfo[]>([]);
-  const [teachers, setTeachers] = useState<{ id: string; user: { name: string } }[]>([]);
-  const [clientId, setClientId] = useState("");
-  const [teacherId, setTeacherId] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [tab, setTab] = useState<"existing" | "new">("existing");
+  const [clients, setClients]   = useState<ClientInfo[]>([]);
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [loadingData, setLoadingData] = useState(true);
+  const [loading, setLoading] = useState(false);
+
+  // ── "Existente" state ──
+  const [clientId, setClientId]   = useState("");
+  const [teacher1, setTeacher1]   = useState(selfTeacherId ?? "");
+  const [teacher2, setTeacher2]   = useState("");
+
+  // ── "Nuevo" state ──
+  const [newName,     setNewName]     = useState("");
+  const [newEmail,    setNewEmail]    = useState("");
+  const [newPhone,    setNewPhone]    = useState("");
+  const [newTeacher1, setNewTeacher1] = useState(selfTeacherId ?? "");
+  const [newTeacher2, setNewTeacher2] = useState("");
 
   useEffect(() => {
     async function load() {
       const [cr, tr] = await Promise.all([
         fetch("/api/clients"),
-        isAdmin ? fetch("/api/teachers") : Promise.resolve(null),
+        fetch("/api/teachers"),
       ]);
       if (cr.ok) setClients(await cr.json());
-      if (tr?.ok) setTeachers(await tr.json());
+      if (tr.ok) setTeachers(await tr.json());
       setLoadingData(false);
     }
     load();
-  }, [isAdmin]);
+  }, []);
 
-  async function handleSave() {
+  // ── Save existing client assignment ──
+  async function handleSaveExisting() {
     if (!clientId) { toast({ title: "Selecciona un cliente", variant: "error" }); return; }
+    if (!teacher1) { toast({ title: "Selecciona al menos un entrenador", variant: "error" }); return; }
     setLoading(true);
-    const res = await fetch("/api/teacher/clients", {
+
+    // Assign to teacher1
+    const r1 = await fetch("/api/teacher/clients", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ clientId, teacherId: isAdmin ? teacherId : undefined }),
+      body: JSON.stringify({ clientId, teacherId: teacher1 }),
     });
+    const d1 = await r1.json();
+    if (!r1.ok && d1.error !== "Ya está asignado") {
+      toast({ title: d1.error || "Error", variant: "error" });
+      setLoading(false);
+      return;
+    }
+
+    // Optionally assign to teacher2
+    if (teacher2 && teacher2 !== teacher1) {
+      const r2 = await fetch("/api/teacher/clients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientId, teacherId: teacher2 }),
+      });
+      const d2 = await r2.json();
+      if (!r2.ok && d2.error !== "Ya está asignado") {
+        toast({ title: d2.error || "Error asignando 2º entrenador", variant: "error" });
+      }
+    }
+
+    toast({ title: "Cliente añadido ✓", variant: "success" });
+    setLoading(false);
+    onSaved();
+  }
+
+  // ── Save new client creation ──
+  async function handleCreateNew() {
+    if (!newName.trim()) { toast({ title: "Nombre requerido", variant: "error" }); return; }
+    if (!newEmail.trim()) { toast({ title: "Email requerido", variant: "error" }); return; }
+    if (!newTeacher1)    { toast({ title: "Selecciona al menos un entrenador", variant: "error" }); return; }
+    setLoading(true);
+
+    const teacherIds = [newTeacher1, ...(newTeacher2 && newTeacher2 !== newTeacher1 ? [newTeacher2] : [])];
+    const res = await fetch("/api/clients", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newName.trim(), email: newEmail.trim(), phone: newPhone.trim() || undefined, teacherIds }),
+    });
+    const d = await res.json();
     if (res.ok) {
-      toast({ title: "Cliente añadido ✓", variant: "success" });
+      toast({ title: "Cliente creado y asignado ✓", variant: "success" });
       onSaved();
     } else {
-      const d = await res.json();
       toast({ title: d.error || "Error", variant: "error" });
     }
     setLoading(false);
   }
 
+  const inputCls = "w-full h-12 rounded-xl border-2 border-gray-200 px-3 text-sm bg-white focus:outline-none focus:border-orange-400";
+  const teacherOptions = (exclude?: string) => teachers.filter(t => t.id !== exclude);
+
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-sm mx-4">
+      <DialogContent className="max-w-sm mx-4 max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Añadir cliente</DialogTitle>
         </DialogHeader>
 
+        {/* Tabs */}
+        <div className="flex rounded-xl bg-gray-100 p-1 gap-1">
+          {(["existing", "new"] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`flex-1 py-1.5 text-sm font-medium rounded-lg transition-colors cursor-pointer ${tab === t ? "bg-white text-orange-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+            >
+              {t === "existing" ? "Existente" : "Nuevo cliente"}
+            </button>
+          ))}
+        </div>
+
         {loadingData ? (
           <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-orange-500" /></div>
-        ) : (
-          <div className="space-y-4">
-            {isAdmin && (
+        ) : tab === "existing" ? (
+          // ── EXISTING CLIENT ────────────────────────────────────────────────
+          <div className="space-y-4 pt-1">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Cliente *</label>
+              <select value={clientId} onChange={e => setClientId(e.target.value)} className={`${inputCls} cursor-pointer`}>
+                <option value="">Selecciona cliente...</option>
+                {clients.map(c => <option key={c.id} value={c.id}>{c.user.name} ({c.user.email})</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Entrenador 1 *</label>
+              <select value={teacher1} onChange={e => setTeacher1(e.target.value)} className={`${inputCls} cursor-pointer`}>
+                <option value="">Selecciona entrenador...</option>
+                {teachers.map(t => <option key={t.id} value={t.id}>{t.user.name}</option>)}
+              </select>
+            </div>
+
+            {(isAdmin || true) && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Entrenador</label>
-                <select
-                  value={teacherId}
-                  onChange={(e) => setTeacherId(e.target.value)}
-                  className="w-full h-12 rounded-xl border-2 border-gray-200 px-3 text-sm bg-white focus:outline-none focus:border-orange-400 cursor-pointer"
-                >
-                  <option value="">Selecciona entrenador...</option>
-                  {teachers.map((t) => <option key={t.id} value={t.id}>{t.user.name}</option>)}
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Entrenador 2 <span className="text-gray-400 font-normal">(opcional)</span></label>
+                <select value={teacher2} onChange={e => setTeacher2(e.target.value)} className={`${inputCls} cursor-pointer`}>
+                  <option value="">Sin 2º entrenador</option>
+                  {teacherOptions(teacher1).map(t => <option key={t.id} value={t.id}>{t.user.name}</option>)}
                 </select>
               </div>
             )}
 
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-xl p-3">
+              Máximo 2 entrenadores por cliente.
+            </p>
+
+            <Button size="lg" className="w-full" onClick={handleSaveExisting} disabled={loading || !clientId || !teacher1}>
+              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Asignar cliente"}
+            </Button>
+          </div>
+        ) : (
+          // ── NEW CLIENT ─────────────────────────────────────────────────────
+          <div className="space-y-4 pt-1">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Cliente *</label>
-              <select
-                value={clientId}
-                onChange={(e) => setClientId(e.target.value)}
-                className="w-full h-12 rounded-xl border-2 border-gray-200 px-3 text-sm bg-white focus:outline-none focus:border-orange-400 cursor-pointer"
-              >
-                <option value="">Selecciona cliente...</option>
-                {clients.map((c) => (
-                  <option key={c.id} value={c.id}>{c.user.name} ({c.user.email})</option>
-                ))}
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Nombre completo *</label>
+              <input
+                type="text" value={newName} onChange={e => setNewName(e.target.value)}
+                placeholder="Ana García López"
+                className={inputCls}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Email *</label>
+              <input
+                type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)}
+                placeholder="ana@ejemplo.com"
+                className={inputCls}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Teléfono <span className="text-gray-400 font-normal">(opcional)</span></label>
+              <input
+                type="tel" value={newPhone} onChange={e => setNewPhone(e.target.value)}
+                placeholder="+34 600 000 000"
+                className={inputCls}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Entrenador 1 *</label>
+              <select value={newTeacher1} onChange={e => setNewTeacher1(e.target.value)} className={`${inputCls} cursor-pointer`}>
+                <option value="">Selecciona entrenador...</option>
+                {teachers.map(t => <option key={t.id} value={t.id}>{t.user.name}</option>)}
               </select>
             </div>
 
-            <div className="rounded-xl bg-amber-50 border border-amber-100 p-3 flex gap-2 items-start text-xs text-amber-700">
-              <Check className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
-              Cada cliente puede tener máximo 2 entrenadores asignados.
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Entrenador 2 <span className="text-gray-400 font-normal">(opcional)</span></label>
+              <select value={newTeacher2} onChange={e => setNewTeacher2(e.target.value)} className={`${inputCls} cursor-pointer`}>
+                <option value="">Sin 2º entrenador</option>
+                {teacherOptions(newTeacher1).map(t => <option key={t.id} value={t.id}>{t.user.name}</option>)}
+              </select>
             </div>
 
-            <Button size="lg" className="w-full" onClick={handleSave} disabled={loading}>
-              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Añadir cliente"}
+            <p className="text-xs text-blue-700 bg-blue-50 border border-blue-100 rounded-xl p-3">
+              Se creará una cuenta nueva. El cliente puede acceder con su email y establecer su contraseña.
+            </p>
+
+            <Button
+              size="lg" className="w-full"
+              onClick={handleCreateNew}
+              disabled={loading || !newName.trim() || !newEmail.trim() || !newTeacher1}
+            >
+              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Crear y asignar cliente"}
             </Button>
           </div>
         )}

@@ -5,7 +5,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Trash2, Loader2, Calendar, Clock, RefreshCw } from "lucide-react";
+import { Plus, Trash2, Loader2, Calendar, Clock, RefreshCw, X, AlertTriangle } from "lucide-react";
 import { toast } from "@/components/ui/toaster";
 
 interface Activity { id: string; name: string }
@@ -57,10 +57,13 @@ function computeSlotPreviews(startTime: string, endTime: string, slotDuration: n
 }
 
 // ── Page ─────────────────────────────────────────────────────────────────────
+const DAYS_ES  = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"]; // 0=Dom..6=Sáb (JS)
+
 export default function AvailabilityPage() {
   const [slots,    setSlots]    = useState<AvailSlot[]>([]);
   const [loading,  setLoading]  = useState(true);
   const [showAdd,  setShowAdd]  = useState(false);
+  const [showBulkClose, setShowBulkClose] = useState(false);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [spaces,     setSpaces]     = useState<Space[]>([]);
 
@@ -93,13 +96,18 @@ export default function AvailabilityPage() {
   return (
     <AppShell title="Mis Disponibilidades">
       <div className="p-4 max-w-2xl mx-auto">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
           <p className="text-sm text-gray-500">
             {slots.length} franja{slots.length !== 1 ? "s" : ""} recurrente{slots.length !== 1 ? "s" : ""}
           </p>
-          <Button size="sm" onClick={() => setShowAdd(true)} disabled={loading}>
-            <Plus className="h-4 w-4" /> Nueva franja horaria
-          </Button>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => setShowBulkClose(true)}>
+              <X className="h-4 w-4" /> Cerrar disponibilidad
+            </Button>
+            <Button size="sm" onClick={() => setShowAdd(true)} disabled={loading}>
+              <Plus className="h-4 w-4" /> Nueva franja
+            </Button>
+          </div>
         </div>
 
         {/* Info banner */}
@@ -193,7 +201,135 @@ export default function AvailabilityPage() {
           onSaved={() => { setShowAdd(false); load(); }}
         />
       )}
+
+      {showBulkClose && (
+        <BulkCloseModal
+          onClose={() => setShowBulkClose(false)}
+          onDone={() => { setShowBulkClose(false); load(); }}
+        />
+      )}
     </AppShell>
+  );
+}
+
+// ── Bulk Close Modal ──────────────────────────────────────────────────────────
+function BulkCloseModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const [from, setFrom] = useState(today);
+  const [to,   setTo]   = useState(today);
+  const [days, setDays] = useState<number[]>([]); // empty = all days
+  const [preview, setPreview] = useState<number | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+  const [closing, setClosing] = useState(false);
+
+  async function fetchPreview(f: string, t: string, d: number[]) {
+    if (!f || !t) return;
+    setLoadingPreview(true);
+    setPreview(null);
+    const dParam = d.length > 0 ? `&daysOfWeek=${d.join(",")}` : "";
+    const res = await fetch(`/api/bookings/bulk-close?from=${f}&to=${t}${dParam}`);
+    if (res.ok) setPreview((await res.json()).count);
+    setLoadingPreview(false);
+  }
+
+  useEffect(() => { fetchPreview(from, to, days); }, [from, to, days]);
+
+  function toggleDay(d: number) {
+    setDays(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]);
+  }
+
+  async function handleClose() {
+    if (preview === 0) return;
+    if (!confirm(`¿Cerrar ${preview} hueco${preview !== 1 ? "s" : ""} disponible${preview !== 1 ? "s" : ""}? Esta acción no se puede deshacer.`)) return;
+    setClosing(true);
+    const res = await fetch("/api/bookings/bulk-close", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ from, to, daysOfWeek: days.length > 0 ? days : undefined }),
+    });
+    if (res.ok) {
+      const d = await res.json();
+      toast({ title: `${d.deleted} huecos cerrados ✓`, variant: "success" });
+      onDone();
+    } else {
+      toast({ title: "Error al cerrar disponibilidad", variant: "error" });
+    }
+    setClosing(false);
+  }
+
+  const inputCls = "w-full h-10 rounded-xl border-2 border-gray-200 px-3 text-sm bg-white focus:outline-none focus:border-orange-400";
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-sm mx-4">
+        <DialogHeader>
+          <DialogTitle>Cerrar disponibilidad</DialogTitle>
+        </DialogHeader>
+        <p className="text-xs text-gray-500 -mt-1">
+          Elimina huecos DISPONIBLES (sin reservar) en el rango seleccionado.
+        </p>
+
+        <div className="space-y-4 pt-1">
+          {/* Date range */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Desde</label>
+              <input type="date" value={from} min={today} onChange={e => setFrom(e.target.value)} className={inputCls} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Hasta</label>
+              <input type="date" value={to} min={from} onChange={e => setTo(e.target.value)} className={inputCls} />
+            </div>
+          </div>
+
+          {/* Day of week filter */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-2">
+              Filtrar por día <span className="text-gray-400 font-normal">(vacío = todos)</span>
+            </label>
+            <div className="flex gap-1.5 flex-wrap">
+              {DAYS_ES.map((label, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => toggleDay(idx)}
+                  className={`px-2.5 py-1 text-xs font-semibold rounded-lg border-2 transition-colors cursor-pointer ${
+                    days.includes(idx)
+                      ? "border-orange-400 bg-orange-50 text-orange-700"
+                      : "border-gray-200 text-gray-500 hover:border-gray-300"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Preview */}
+          <div className={`rounded-xl p-4 flex items-center gap-3 ${preview === 0 ? "bg-gray-50 border border-gray-100" : "bg-red-50 border border-red-200"}`}>
+            {loadingPreview ? (
+              <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+            ) : (
+              <>
+                <AlertTriangle className={`h-5 w-5 flex-shrink-0 ${preview === 0 ? "text-gray-300" : "text-red-400"}`} />
+                <div>
+                  <p className={`text-2xl font-black ${preview === 0 ? "text-gray-400" : "text-red-600"}`}>{preview ?? "—"}</p>
+                  <p className="text-xs text-gray-500">huecos disponibles a eliminar</p>
+                </div>
+              </>
+            )}
+          </div>
+
+          <Button
+            size="lg" className="w-full bg-red-500 hover:bg-red-600 text-white"
+            onClick={handleClose}
+            disabled={closing || !preview || preview === 0}
+          >
+            {closing ? <Loader2 className="h-5 w-5 animate-spin" /> : <X className="h-4 w-4" />}
+            {preview ? `Cerrar ${preview} huecos` : "Sin huecos en este rango"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
