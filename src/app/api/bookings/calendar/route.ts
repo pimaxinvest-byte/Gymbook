@@ -29,7 +29,13 @@ export async function GET(req: NextRequest) {
   if (clientId) where.clientId = clientId;
   if (activityId) where.activityId = activityId;
   if (spaceId) where.spaceId = spaceId;
-  if (status) where.status = status;
+  // By default exclude CANCELLED bookings from calendar (they add visual noise).
+  // Pass ?status=CANCELLED explicitly to see them.
+  if (status) {
+    where.status = status;
+  } else {
+    where.status = { not: "CANCELLED" };
+  }
 
   // TEACHER role: only own bookings
   if (session.user.role === "TEACHER") {

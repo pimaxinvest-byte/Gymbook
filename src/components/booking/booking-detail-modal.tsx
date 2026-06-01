@@ -42,18 +42,39 @@ export function BookingDetailModal({ bookingId, onClose, onUpdate }: BookingDeta
   }, [bookingId]);
 
   async function handleCancel() {
+    if (!booking) return;
+    const isAvailable = booking.status === "AVAILABLE";
+    const confirmMsg = isAvailable
+      ? "¿Cerrar este hueco de disponibilidad? Se eliminará del planning."
+      : "¿Cancelar esta reserva?";
+    if (!confirm(confirmMsg)) return;
+
     setCancelling(true);
-    const res = await fetch(`/api/bookings/${bookingId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "CANCELLED" }),
-    });
-    if (res.ok) {
-      toast({ title: "Reserva cancelada", variant: "success" });
-      onUpdate();
+
+    if (isAvailable) {
+      // Closing availability = delete the slot entirely
+      const res = await fetch(`/api/bookings/${bookingId}`, { method: "DELETE" });
+      if (res.ok) {
+        toast({ title: "Disponibilidad cerrada", variant: "success" });
+        onUpdate();
+      } else {
+        toast({ title: "Error al cerrar disponibilidad", variant: "error" });
+        setCancelling(false);
+      }
     } else {
-      toast({ title: "Error al cancelar", variant: "error" });
-      setCancelling(false);
+      // Cancelling a booked session → mark CANCELLED
+      const res = await fetch(`/api/bookings/${bookingId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "CANCELLED" }),
+      });
+      if (res.ok) {
+        toast({ title: "Reserva cancelada", variant: "success" });
+        onUpdate();
+      } else {
+        toast({ title: "Error al cancelar", variant: "error" });
+        setCancelling(false);
+      }
     }
   }
 
@@ -123,7 +144,7 @@ export function BookingDetailModal({ bookingId, onClose, onUpdate }: BookingDeta
                 ) : (
                   <>
                     <Trash2 className="h-4 w-4" />
-                    Cancelar reserva
+                    {booking.status === "AVAILABLE" ? "Cerrar disponibilidad" : "Cancelar reserva"}
                   </>
                 )}
               </Button>

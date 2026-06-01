@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/layout/app-shell";
-import { GymCalendar } from "@/components/calendar/gym-calendar";
+import { PlanningCalendar } from "@/components/calendar/planning-calendar";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CalendarPlus, Clock, Download, Loader2, Plus, Timer } from "lucide-react";
@@ -114,7 +114,7 @@ export default function TeacherSchedulePage() {
       <div className="p-4">
         {/* Actions */}
         <div className="flex items-center justify-between mb-3">
-          <div className="flex gap-4 text-xs text-gray-500">
+          <div className="flex gap-3 text-xs text-gray-500 flex-wrap">
             <span className="flex items-center gap-1.5">
               <span className="w-4 h-3 rounded opacity-50 border-2 border-dashed border-orange-400 bg-orange-400 inline-block" />
               Disponible
@@ -127,6 +127,7 @@ export default function TeacherSchedulePage() {
               <span className="w-4 h-3 rounded bg-purple-500 inline-block" />
               SGT
             </span>
+            <span className="text-gray-400">· Click = detalle · Ctrl+Click = seleccionar múltiples</span>
           </div>
           <div className="flex gap-2">
             <Button size="sm" variant="outline" onClick={handleExportICS} disabled={exporting}>
@@ -141,7 +142,7 @@ export default function TeacherSchedulePage() {
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden p-3">
-          <GymCalendar key={refreshKey} initialView="timeGridWeek" />
+          <PlanningCalendar onRefreshKey={refreshKey} />
         </div>
       </div>
 

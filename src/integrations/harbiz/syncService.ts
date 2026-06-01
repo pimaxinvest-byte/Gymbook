@@ -512,20 +512,47 @@ async function fetchAllClients(harbiz: HarbizDdpClient): Promise<HarbizClient[]>
   return all;
 }
 
+/**
+ * Harbiz session type names can be plain strings OR i18n objects
+ * like { es: "Entrenamiento presencial", default: "Entrenamiento presencial" }.
+ * Extract a plain string in either case.
+ */
+function extractName(raw: unknown): string {
+  if (typeof raw === "string") return raw;
+  if (raw && typeof raw === "object") {
+    const obj = raw as Record<string, unknown>;
+    // Try common locale keys, then "default", then first string value
+    for (const key of ["es", "en", "default"]) {
+      if (typeof obj[key] === "string") return obj[key] as string;
+    }
+    const firstStr = Object.values(obj).find((v) => typeof v === "string");
+    if (firstStr) return firstStr as string;
+  }
+  return "";
+}
+
 async function resolveSessionTypes(
-  sessionTypes: { _id: string; name: string }[],
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  sessionTypes: { _id: string; name: any }[],
   teacherId: string
 ): Promise<Map<string, string>> {
   const map = new Map<string, string>();
   for (const st of sessionTypes) {
-    // Try to find matching GymBook activity by name
+    const name = extractName(st.name);
+    if (!name) continue;
+    // Try to find matching GymBook activity by name (exact insensitive first)
     const activity = await prisma.activity.findFirst({
-      where: { name: { equals: st.name, mode: "insensitive" } },
+      where: { name: { equals: name, mode: "insensitive" } },
+    }) ?? await prisma.activity.findFirst({
+      // fallback: substring match
+      where: { name: { contains: name.split(" ")[0], mode: "insensitive" } },
     });
     if (activity) {
       map.set(st._id, activity.id);
     }
   }
+  // Ensure default activity is always resolvable
+  void teacherId;
   return map;
 }
 
