@@ -22,9 +22,9 @@ const navItems: NavItem[] = [
   { href: "/credits",              label: "Créditos",    icon: CreditCard,     roles: ["CLIENT"] },
   { href: "/settings",             label: "Ajustes",     icon: Settings,       roles: ["CLIENT"] },
   // TEACHER tabs (5 max)
+  { href: "/teacher/dashboard",    label: "Dashboard",   icon: LayoutDashboard,roles: ["TEACHER"] },
   { href: "/calendar",             label: "Calendario",  icon: Calendar,       roles: ["TEACHER"] },
   { href: "/teacher/schedule",     label: "Planning",    icon: CalendarCheck,  roles: ["TEACHER"] },
-  { href: "/teacher/availability", label: "Disponib.",   icon: PlusCircle,     roles: ["TEACHER"] },
   { href: "/teacher/clients",      label: "Clientes",    icon: UserCircle,     roles: ["TEACHER"] },
   { href: "/settings",             label: "Ajustes",     icon: Settings,       roles: ["TEACHER"] },
   // ADMIN tabs (5 max)

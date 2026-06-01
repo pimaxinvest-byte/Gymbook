@@ -3,7 +3,10 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { addDays, parseISO, isAfter } from "date-fns";
+import { fromZonedTime } from "date-fns-tz";
 import { checkBookingConflicts } from "@/lib/booking-conflicts";
+
+const TIMEZONE = "Europe/Madrid";
 
 const schema = z.object({
   teacherId:    z.string().optional(),
@@ -20,11 +23,17 @@ const schema = z.object({
   capacity:     z.number().int().min(1).max(5).default(1),
 });
 
-function setTimeOnDate(date: Date, timeStr: string): Date {
+/**
+ * Convert a date + "HH:MM" string in Europe/Madrid into a UTC Date.
+ * Uses date-fns-tz for correct DST handling.
+ */
+function setMadridTime(date: Date, timeStr: string): Date {
   const [h, m] = timeStr.split(":").map(Number);
-  const d = new Date(date);
-  d.setHours(h, m, 0, 0);
-  return d;
+  // Get the calendar date in Madrid to avoid day-boundary issues
+  const madridDateStr = date.toLocaleDateString("en-CA", { timeZone: TIMEZONE }); // "YYYY-MM-DD"
+  const hh = String(h).padStart(2, "0");
+  const mm = String(m).padStart(2, "0");
+  return fromZonedTime(`${madridDateStr}T${hh}:${mm}:00`, TIMEZONE);
 }
 
 function timeToMinutes(time: string): number {
@@ -154,8 +163,8 @@ export async function POST(req: NextRequest) {
       if (data.daysOfWeek.includes(jsDay)) {
         let slotStartMins = rangeStart;
         while (slotStartMins + data.slotDuration <= rangeEnd) {
-          const start = setTimeOnDate(current, minutesToTimeStr(slotStartMins));
-          const end   = setTimeOnDate(current, minutesToTimeStr(slotStartMins + data.slotDuration));
+          const start = setMadridTime(current, minutesToTimeStr(slotStartMins));
+          const end   = setMadridTime(current, minutesToTimeStr(slotStartMins + data.slotDuration));
           if (start > now) {
             slots.push({ start, end });
           }

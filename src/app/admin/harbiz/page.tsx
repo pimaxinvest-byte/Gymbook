@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import type { HarbizSyncResult, HarbizDiffItem } from "@/integrations/harbiz/types";
+import { AppShell } from "@/components/layout/app-shell";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -104,21 +105,11 @@ export default function HarbizSyncPage() {
   if (!session || session.user.role !== "ADMIN") return null;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="max-w-4xl mx-auto flex items-center gap-3">
-          <button onClick={() => router.back()} className="text-gray-500 hover:text-gray-700 cursor-pointer">
-            ← Volver
-          </button>
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">Sincronización Harbiz</h1>
-            <p className="text-sm text-gray-500">Importa clientes, sesiones y bonos desde Harbiz a GymBook</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
+    <AppShell title="Sincronización Harbiz">
+      <div className="p-4 max-w-2xl mx-auto space-y-4">
+        <button onClick={() => router.back()} className="text-sm text-gray-500 hover:text-orange-500 cursor-pointer">
+          ← Volver
+        </button>
 
         {/* Status card */}
         <StatusCard status={syncStatus} />
@@ -174,7 +165,7 @@ export default function HarbizSyncPage() {
           <RecentLogs logs={syncStatus.recentLogs} />
         )}
       </div>
-    </div>
+    </AppShell>
   );
 }
 

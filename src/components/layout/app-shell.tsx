@@ -1,5 +1,4 @@
 import { Header } from "./header";
-import { BottomNav } from "./bottom-nav";
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -18,7 +17,6 @@ export function AppShell({ children, title, gymName, logoUrl }: AppShellProps) {
           Creado por Pietro
         </p>
       </main>
-      <BottomNav />
     </div>
   );
 }

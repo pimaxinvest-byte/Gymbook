@@ -134,6 +134,7 @@ export function GymCalendar({
         <FullCalendar
           ref={calendarRef}
           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, listPlugin]}
+          timeZone="Europe/Madrid"
           initialView={initialView}
           headerToolbar={{
             left: "prev,next today",
